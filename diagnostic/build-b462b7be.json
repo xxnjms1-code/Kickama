@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-06-20T21:14:22.997840+00:00",
+  "commit": "b462b7be",
+  "diagnostic_logd": "diagnostic/build-b462b7be.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "7fad63d2e47b5df0198b",
+  "decrypt_command": "encryptly unpack diagnostic/build-b462b7be.logd <outdir> --password 7fad63d2e47b5df0198b",
+  "total_modules": 10,
+  "passed": 6,
+  "failed": 4,
+  "modules": [
+    {
+      "name": "backend",
+      "status": "FAIL",
+      "elapsed_seconds": 1.282,
+      "artifact": null,
+      "output": "error: rustup could not choose a version of cargo to run, because one wasn't specified explicitly, and no default is configured.\nhelp: run 'rustup default stable' to download the latest stable release of Rust and set it as your default toolchain."
+    },
+    {
+      "name": "frontend",
+      "status": "PASS",
+      "elapsed_seconds": 9.076,
+      "artifact": "/Volumes/Soengkit\u786c\u76d8/Codex\u65b0\u9879\u76ee\u4e0e\u8f93\u51fa/2026-06-19_Agent Bounty Workbench/02_candidate_bounties/xxnjms-kickama-collector-idempotent-2/repo/frontend/dist",
+      "output": "> tent-frontend@0.0.0 build\n> tsc -b && vite build\n\nvite v6.4.3 building for production...\ntransforming...\n\u2713 100 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.62 kB \u2502 gzip:  0.34 kB\ndist/assets/state-BkjSKDbY.js     8.91 kB \u2502 gzip:  3.54 kB \u2502 map:    57.15 kB\ndist/assets/vendor-CREcWLHI.js   48.93 kB \u2502 gzip: 17.25 kB \u2502 map:   481.27 kB\ndist/assets/index-CyxcoTyU.js   231.32 kB \u2502 gzip: 72.16 kB \u2502 map: 1,044.42 kB\n\u2713 built in 750ms"
+    },
+    {
+      "name": "market",
+      "status": "PASS",
+      "elapsed_seconds": 3.026,
+      "artifact": "/Volumes/Soengkit\u786c\u76d8/Codex\u65b0\u9879\u76ee\u4e0e\u8f93\u51fa/2026-06-19_Agent Bounty Workbench/02_candidate_bounties/xxnjms-kickama-collector-idempotent-2/repo/market/market",
+      "output": ""
+    },
+    {
+      "name": "frailbox",
+      "status": "FAIL",
+      "elapsed_seconds": 0.311,
+      "artifact": null,
+      "output": "gcc -Wall -Wextra -Wpedantic -std=c2x -O2 -g -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -Iinclude -MMD -MP -c src/arena.c -o build/src/arena.o\nsrc/arena.c:17:23: error: use of undeclared identifier 'MAP_HUGETLB'\n   17 |         mmap_flags |= MAP_HUGETLB;\n      |                       ^~~~~~~~~~~\nsrc/arena.c:179:17: warning: comparison of distinct pointer types ('const void *' and 'char *') [-Wcompare-distinct-pointer-types]\n  179 |             ptr < (char *)region->start + region->size) {\n      |             ~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n1 warning and 1 error generated.\nmake: *** [build/src/arena.o] Error 1"
+    },
+    {
+      "name": "engine",
+      "status": "PASS",
+      "elapsed_seconds": 7.0,
+      "artifact": "/Volumes/Soengkit\u786c\u76d8/Codex\u65b0\u9879\u76ee\u4e0e\u8f93\u51fa/2026-06-19_Agent Bounty Workbench/02_candidate_bounties/xxnjms-kickama-collector-idempotent-2/repo/frailbox/engine/build/trial-engine",
+      "output": "[ 11%] Building CXX object CMakeFiles/trial-engine.dir/main.cpp.o\n[ 22%] Building CXX object CMakeFiles/trial-engine.dir/core/math.cpp.o\n[ 33%] Building CXX object CMakeFiles/trial-engine.dir/core/ecs.cpp.o\n[ 44%] Building CXX object CMakeFiles/trial-engine.dir/dynamics/rigidbody.cpp.o\n[ 55%] Building CXX object CMakeFiles/trial-engine.dir/dynamics/constraint.cpp.o\n[ 66%] Building CXX object CMakeFiles/trial-engine.dir/collision/collision.cpp.o\n[ 77%] Building CXX object CMakeFiles/trial-engine.dir/Volumes/Soengkit\u786c\u76d8/Codex\u65b0\u9879\u76ee\u4e0e\u8f93\u51fa/2026-06-19_Agent_Bounty_Workbench/02_candidate_bounties/xxnjms-kickama-collector-idempotent-2/repo/frailbox/wat.cpp.o\n[ 88%] Building CXX object CMakeFiles/trial-engine.dir/Volumes/Soengkit\u786c\u76d8/Codex\u65b0\u9879\u76ee\u4e0e\u8f93\u51fa/2026-06-19_Agent_Bounty_Workbench/02_candidate_bounties/xxnjms-kickama-collector-idempotent-2/repo/frailbox/engine.cpp.o\n[100%] Linking CXX executable trial-engine\n[100%] Built target trial-engine"
+    },
+    {
+      "name": "compliance",
+      "status": "FAIL",
+      "elapsed_seconds": 0.012,
+      "artifact": null,
+      "output": "The operation couldn\u2019t be completed. Unable to locate a Java Runtime.\nPlease visit http://www.java.com for information on installing Java."
+    },
+    {
+      "name": "v2-market-stream",
+      "status": "PASS",
+      "elapsed_seconds": 0.09,
+      "artifact": null,
+      "output": "Syntax OK"
+    },
+    {
+      "name": "nfc-scanner",
+      "status": "PASS",
+      "elapsed_seconds": 0.025,
+      "artifact": null,
+      "output": ""
+    },
+    {
+      "name": "openapi-haskell",
+      "status": "FAIL",
+      "elapsed_seconds": 4.843,
+      "artifact": null,
+      "output": "[1 of 8] Compiling Network.HTTP.Types ( Network/HTTP/Types.hs, nothing )\n[2 of 8] Compiling Network.Wai      ( Network/Wai.hs, nothing )\n[3 of 8] Compiling Network.Wai.Handler.Warp ( Network/Wai/Handler/Warp.hs, nothing )\n[4 of 8] Compiling Network.Wai.Logger ( Network/Wai/Logger.hs, nothing )\n[5 of 8] Compiling Tent.OpenAPI.Types ( Types.hs, /var/folders/3k/nc3_8hy10_x8dxn_6c6nsh5m0000gn/T/ghc54686_0/ghc_4.o, /var/folders/3k/nc3_8hy10_x8dxn_6c6nsh5m0000gn/T/ghc54686_0/ghc_4.dyn_o )\nTypes.hs:50:1: error: [GHC-61948]\n    Could not find module \u2018Data.Aeson\u2019.\n    Perhaps you meant Data.Version (from base-4.20.2.0)\n    Use -v to see a list of the files searched for.\n   |\n50 | import Data.Aeson (FromJSON(parseJSON), ToJSON(toJSON), Value(Object), (.!=), (.:?), (.=))\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nTypes.hs:51:1: error: [GHC-87110]\n    Could not find module \u2018Data.Aeson.Types\u2019.\n    Use -v to see a list of the files searched for.\n   |\n51 | import Data.Aeson.Types (Parser, parseMaybe)\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nTypes.hs:71:1: error: [GHC-61948]\n    Could not find module \u2018Data.Aeson\u2019.\n    Perhaps you meant Data.Version (from base-4.20.2.0)\n    Use -v to see a list of the files searched for.\n   |\n71 | import qualified Data.Aeson as A\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nTypes.hs:72:1: error: [GHC-87110]\n    Could not find module \u2018Data.Aeson.Key\u2019.\n    Use -v to see a list of the files searched for.\n   |\n72 | import qualified Data.Aeson.Key as K\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nTypes.hs:73:1: error: [GHC-87110]\n    Could not find module \u2018Data.Aeson.KeyMap\u2019.\n    Use -v to see a list of the files searched for.\n   |\n73 | import qualified Data.Aeson.KeyMap as KM\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nTypes.hs:74:1: error: [GHC-61948]\n    Could not find module \u2018Data.HashMap.Strict\u2019.\n    Perhaps you meant\n      Data.Map.Strict (from containers-0.7)\n      Data.IntMap.Strict (from containers-0.7)\n    Use -v to see a list of the files searched for.\n   |\n74 | import qualified Data.HashMap.Strict as HM\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nTypes.hs:77:1: error: [GHC-87110]\n    Could not find module \u2018Data.Yaml\u2019.\n    Use -v to see a list of the files searched for.\n   |\n77 | import qualified Data.Yaml as Y\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+    },
+    {
+      "name": "openapi-tools",
+      "status": "PASS",
+      "elapsed_seconds": 0.016,
+      "artifact": null,
+      "output": ""
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-b462b7be.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
