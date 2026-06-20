@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:auth-refresh-coordination": "node test-auth-refresh-coordinator.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

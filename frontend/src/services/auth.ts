@@ -15,6 +15,7 @@
  */
 
 import { get, post, del } from './api';
+import { TokenRefreshCoordinator } from './authRefreshCoordinator';
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -129,6 +130,7 @@ let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+const refreshCoordinator = new TokenRefreshCoordinator<AuthTokens>();
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -277,24 +279,22 @@ export async function logout(): Promise<void> {
 }
 
 export async function refreshTokens(): Promise<AuthTokens | null> {
-  const tokens = currentTokens || loadStoredTokens();
-  if (!tokens?.refreshToken) return null;
-
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
-    });
-
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
-
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
-    return null;
-  }
+  return refreshCoordinator.refresh({
+    getRefreshToken: () => (currentTokens || loadStoredTokens())?.refreshToken || null,
+    performRefresh: async refreshToken => {
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', { refreshToken });
+      return response.data.tokens;
+    },
+    applyTokens: tokens => {
+      storeTokens(tokens);
+      scheduleTokenRefresh(tokens);
+    },
+    clearAuth: () => {
+      clearStoredTokens();
+      currentUser = null;
+      notifyListeners(null);
+    },
+  });
 }
 
 export async function getCurrentUser(): Promise<User | null> {
