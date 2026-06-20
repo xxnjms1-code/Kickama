@@ -117,9 +117,33 @@ export interface Session {
   isCurrent: boolean;
 }
 
+
 // ---------------------------------------------------------------------------
 // STATE
 // ---------------------------------------------------------------------------
+
+const AUTH_CHANNEL_NAME = 'tot_auth_sync';
+const authChannel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+
+let isRefreshing = false;
+let refreshPromise: Promise<AuthTokens | null> | null = null;
+
+authChannel.onmessage = (event) => {
+  if (event.data.type === 'TOKEN_REFRESHED') {
+    const tokens = event.data.tokens;
+    storeTokens(tokens);
+    scheduleTokenRefresh(tokens);
+  } else if (event.data.type === 'LOGOUT') {
+    clearStoredTokens();
+    currentUser = null;
+    if (refreshTimer !== null) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    notifyListeners(null);
+  }
+};
+
 
 const TOKEN_KEY = 'tot_auth_tokens';
 const USER_KEY = 'tot_user_data';
@@ -274,6 +298,7 @@ export async function logout(): Promise<void> {
   }
 
   notifyListeners(null);
+  authChannel.postMessage({ type: 'LOGOUT' });
 }
 
 export async function refreshTokens(): Promise<AuthTokens | null> {
