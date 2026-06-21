@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
+	"sync"\n\t"sync/atomic"
 	"time"
 )
 
@@ -462,6 +462,10 @@ func (c *Collector) RecordHistogram(name string, value float64, tags ...MetricTa
 // goroutines, causing duplicate flushes. This is a known issue.
 // TODO: Make Start() idempotent.
 func (c *Collector) Start(ctx context.Context) {
+	if !atomic.CompareAndSwapInt32(&c.started, 0, 1) {
+		// Already started
+		return
+	}
 	go func() {
 		// Tick immediately to flush any bootstrapped metrics
 		c.flush(ctx)
@@ -485,7 +489,7 @@ func (c *Collector) Start(ctx context.Context) {
 // Stop signals the flush loop to stop. It does NOT perform a final flush.
 // If you want a final flush, call Flush() before Stop().
 // TODO: Add a Drain() method that performs a final flush and then stops.
-func (c *Collector) Stop() {
+func (c *Collector) Stop() {\n\tatomic.StoreInt32(&c.started, 0)
 	select {
 	case c.stopCh <- struct{}{}:
 	default:
