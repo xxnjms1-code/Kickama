@@ -79,8 +79,12 @@ def check_http_service(host: str, port: int, path: str, timeout: int) -> Tuple[s
         conn.close()
 
         if status == 200:
-            result = "OK"
-            detail = f"HTTP {status}"
+            if not body or len(body.strip()) == 0:
+                result = "CRITICAL"
+                detail = f"HTTP {status}: Empty response body"
+            else:
+                result = "OK"
+                detail = f"HTTP {status}"
         elif status < 500:
             result = "WARNING"
             detail = f"HTTP {status}: {body[:100]}"
