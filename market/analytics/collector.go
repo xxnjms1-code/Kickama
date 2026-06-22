@@ -15,12 +15,9 @@ package analytics
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -304,6 +301,7 @@ type Collector struct {
 	dropped       int64
 	collectors    []MetricCollector
 	enricher      func(*MetricSample)
+	started       bool
 }
 
 // MetricCollector is an interface for sub-collectors that gather
@@ -458,10 +456,18 @@ func (c *Collector) RecordHistogram(name string, value float64, tags ...MetricTa
 // Start begins the background flush loop. It spawns a goroutine that
 // periodically flushes collected metrics to the backend. The flush
 // loop will stop when the context is cancelled or Stop() is called.
-// NOTE: Calling Start() multiple times will spawn multiple flush
-// goroutines, causing duplicate flushes. This is a known issue.
-// TODO: Make Start() idempotent.
+// Calling Start() multiple times is safe; only one flush loop will run.
 func (c *Collector) Start(ctx context.Context) {
+	c.mu.Lock()
+	if c.started {
+		c.mu.Unlock()
+		return
+	}
+	stopCh := make(chan struct{})
+	c.stopCh = stopCh
+	c.started = true
+	c.mu.Unlock()
+
 	go func() {
 		// Tick immediately to flush any bootstrapped metrics
 		c.flush(ctx)
@@ -472,8 +478,9 @@ func (c *Collector) Start(ctx context.Context) {
 			case <-ctx.Done():
 				// Final flush before exiting
 				c.flush(context.Background())
+				c.setStopped()
 				return
-			case <-c.stopCh:
+			case <-stopCh:
 				return
 			case <-ticker.C:
 				c.flush(ctx)
@@ -482,14 +489,26 @@ func (c *Collector) Start(ctx context.Context) {
 	}()
 }
 
+func (c *Collector) setStopped() {
+	c.mu.Lock()
+	c.started = false
+	c.mu.Unlock()
+}
+
 // Stop signals the flush loop to stop. It does NOT perform a final flush.
 // If you want a final flush, call Flush() before Stop().
-// TODO: Add a Drain() method that performs a final flush and then stops.
+// After Stop returns, the collector can be started again with Start().
 func (c *Collector) Stop() {
-	select {
-	case c.stopCh <- struct{}{}:
-	default:
+	c.mu.Lock()
+	if !c.started {
+		c.mu.Unlock()
+		return
 	}
+	c.started = false
+	ch := c.stopCh
+	c.mu.Unlock()
+
+	close(ch)
 }
 
 // Flush immediately flushes all buffered metrics to the backend.
