@@ -9,9 +9,9 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * Token refresh is coordinated across tabs via BroadcastChannel (with
+ * localStorage fallback) so that concurrent refresh attempts share one
+ * in-flight request and token updates are propagated safely.
  */
 
 import { get, post, del } from './api';
@@ -124,11 +124,83 @@ export interface Session {
 const TOKEN_KEY = 'tot_auth_tokens';
 const USER_KEY = 'tot_user_data';
 const REFRESH_THRESHOLD = 60; // seconds before expiry to attempt refresh
+const BROADCAST_KEY = 'tot_auth_refresh';
+const STORAGE_EVENT_KEY = 'tot_auth_tokens_changed';
 
 let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+
+// Cross-tab refresh coordination
+let inFlightRefresh: Promise<AuthTokens | null> | null = null;
+let refreshChannel: BroadcastChannel | null = null;
+
+function getRefreshChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === 'undefined') return null;
+  if (!refreshChannel) {
+    try {
+      refreshChannel = new BroadcastChannel('tot_auth_refresh');
+      refreshChannel.onmessage = (event: MessageEvent) => {
+        if (event.data?.type === 'tokens_updated' && event.data.tokens) {
+          handleTokensReceivedFromBroadcast(event.data.tokens);
+        } else if (event.data?.type === 'logout') {
+          clearStoredTokens();
+          currentUser = null;
+          if (refreshTimer !== null) {
+            clearTimeout(refreshTimer);
+            refreshTimer = null;
+          }
+          notifyListeners(null);
+        }
+      };
+    } catch {
+      return null;
+    }
+  }
+  return refreshChannel;
+}
+
+function broadcastTokensUpdated(tokens: AuthTokens): void {
+  const channel = getRefreshChannel();
+  if (channel) {
+    try {
+      channel.postMessage({ type: 'tokens_updated', tokens });
+    } catch {
+      // broadcast failed, ignore
+    }
+  }
+  // Also write to localStorage for tabs that don't support BroadcastChannel
+  try {
+    const event = new CustomEvent(STORAGE_EVENT_KEY, { detail: { tokens } });
+    window.dispatchEvent(event);
+  } catch {
+    // ignore
+  }
+}
+
+function handleTokensReceivedFromBroadcast(tokens: AuthTokens): void {
+  if (!tokens?.accessToken) return;
+  // Only adopt if the incoming tokens are fresher than what we have
+  const currentExpiry = currentTokens ? getTokenExpiry(currentTokens.accessToken) : 0;
+  const newExpiry = getTokenExpiry(tokens.accessToken);
+  if (newExpiry > currentExpiry) {
+    storeTokens(tokens);
+    scheduleTokenRefresh(tokens);
+  }
+}
+
+function setupStorageListener(): void {
+  if (typeof window === 'undefined') return;
+  window.addEventListener(STORAGE_EVENT_KEY, ((event: CustomEvent) => {
+    if (event.detail?.tokens) {
+      handleTokensReceivedFromBroadcast(event.detail.tokens);
+    }
+  }) as EventListener);
+}
+
+// Initialize the storage listener on module load
+setupStorageListener();
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -235,6 +307,7 @@ export async function login(request: LoginRequest): Promise<AuthTokens> {
   }
 
   scheduleTokenRefresh(response.data.tokens);
+  broadcastTokensUpdated(response.data.tokens);
   notifyListeners(response.data.user);
 
   return response.data.tokens;
@@ -253,6 +326,7 @@ export async function register(request: RegisterRequest): Promise<AuthTokens> {
   }
 
   scheduleTokenRefresh(response.data.tokens);
+  broadcastTokensUpdated(response.data.tokens);
   notifyListeners(response.data.user);
 
   return response.data.tokens;
@@ -273,28 +347,63 @@ export async function logout(): Promise<void> {
     refreshTimer = null;
   }
 
+  // Broadcast logout to other tabs
+  const channel = getRefreshChannel();
+  if (channel) {
+    try {
+      channel.postMessage({ type: 'logout' });
+    } catch {
+      // ignore
+    }
+  }
+
   notifyListeners(null);
 }
 
 export async function refreshTokens(): Promise<AuthTokens | null> {
+  // If there's already a refresh in flight, wait for it instead of starting another
+  if (inFlightRefresh) {
+    return inFlightRefresh;
+  }
+
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
-    });
+  inFlightRefresh = (async () => {
+    try {
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
+        refreshToken: tokens.refreshToken,
+      });
 
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
+      storeTokens(response.data.tokens);
+      scheduleTokenRefresh(response.data.tokens);
+      broadcastTokensUpdated(response.data.tokens);
 
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
-    return null;
-  }
+      return response.data.tokens;
+    } catch {
+      // Only clear tokens if no other tab has successfully refreshed
+      // Check localStorage for fresher tokens before clearing
+      const stored = loadStoredTokens();
+      const storedExpiry = stored ? getTokenExpiry(stored.accessToken) : 0;
+      const currentExpiry = tokens ? getTokenExpiry(tokens.accessToken) : 0;
+
+      if (storedExpiry > currentExpiry) {
+        // Another tab already refreshed successfully, adopt their tokens
+        storeTokens(stored!);
+        scheduleTokenRefresh(stored!);
+        return stored;
+      }
+
+      clearStoredTokens();
+      currentUser = null;
+      notifyListeners(null);
+      return null;
+    } finally {
+      inFlightRefresh = null;
+    }
+  })();
+
+  return inFlightRefresh;
 }
 
 export async function getCurrentUser(): Promise<User | null> {

@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-06-22T08:35:26.249181+00:00",
+  "commit": "2b54872c",
+  "diagnostic_logd": "diagnostic/build-2b54872c.logd",
+  "diagnostic_logd_error": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "7c5dd2054670445edd5e",
+  "decrypt_command": "encryptly unpack diagnostic/build-2b54872c.logd <outdir> --password 7c5dd2054670445edd5e",
+  "total_modules": 1,
+  "passed": 0,
+  "failed": 1,
+  "modules": [
+    {
+      "name": "frontend",
+      "status": "FAIL",
+      "elapsed_seconds": 120.107,
+      "artifact": null,
+      "output": "npm install TIMEOUT (120s)"
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-2b54872c.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
