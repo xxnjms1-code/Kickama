@@ -9,9 +9,9 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * Cross-tab refresh coordination uses BroadcastChannel (with localStorage
+ * fallback) so that concurrent refresh attempts across tabs share one
+ * in-flight request and token updates propagate safely.
  */
 
 import { get, post, del } from './api';
@@ -124,11 +124,24 @@ export interface Session {
 const TOKEN_KEY = 'tot_auth_tokens';
 const USER_KEY = 'tot_user_data';
 const REFRESH_THRESHOLD = 60; // seconds before expiry to attempt refresh
+const REFRESH_LOCK_KEY = 'tot_refresh_lock';
+const REFRESH_LOCK_TTL = 10000; // ms before a stale lock is considered released
 
 let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+
+// Cross-tab refresh coordination
+let inFlightRefresh: Promise<AuthTokens | null> | null = null;
+
+// BroadcastChannel for cross-tab token sync (with localStorage fallback)
+let tokenChannel: BroadcastChannel | null = null;
+try {
+  tokenChannel = new BroadcastChannel('tot_auth_sync');
+} catch {
+  // BroadcastChannel not supported, will use localStorage events
+}
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -196,6 +209,125 @@ function notifyListeners(user: User | null): void {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// CROSS-TAB COORDINATION
+// ---------------------------------------------------------------------------
+
+function broadcastTokens(tokens: AuthTokens): void {
+  const payload = JSON.stringify(tokens);
+  if (tokenChannel) {
+    tokenChannel.postMessage({ type: 'tokens_updated', tokens: payload });
+  }
+  try {
+    localStorage.setItem(TOKEN_KEY, payload);
+  } catch {
+    // ignore
+  }
+  try {
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: TOKEN_KEY,
+      newValue: payload,
+    }));
+  } catch {
+    // ignore
+  }
+}
+
+function broadcastLogout(): void {
+  if (tokenChannel) {
+    tokenChannel.postMessage({ type: 'logout' });
+  }
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: TOKEN_KEY,
+      newValue: null,
+    }));
+  } catch {
+    // ignore
+  }
+}
+
+function acquireRefreshLock(): boolean {
+  try {
+    const now = Date.now();
+    const existing = localStorage.getItem(REFRESH_LOCK_KEY);
+    if (existing) {
+      const lockTime = parseInt(existing, 10);
+      if (now - lockTime < REFRESH_LOCK_TTL) {
+        return false;
+      }
+    }
+    localStorage.setItem(REFRESH_LOCK_KEY, String(now));
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function releaseRefreshLock(): void {
+  try {
+    localStorage.removeItem(REFRESH_LOCK_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function handleCrossTabMessage(event: MessageEvent): void {
+  const data = event.data;
+  if (!data || typeof data !== 'object') return;
+
+  if (data.type === 'tokens_updated') {
+    try {
+      const tokens = JSON.parse(data.tokens) as AuthTokens;
+      currentTokens = tokens;
+      scheduleTokenRefresh(tokens);
+    } catch {
+      // ignore
+    }
+  } else if (data.type === 'logout') {
+    currentTokens = null;
+    currentUser = null;
+    if (refreshTimer !== null) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    notifyListeners(null);
+  }
+}
+
+function handleStorageEvent(event: StorageEvent): void {
+  if (event.key === TOKEN_KEY) {
+    if (event.newValue) {
+      try {
+        const tokens = JSON.parse(event.newValue) as AuthTokens;
+        currentTokens = tokens;
+        scheduleTokenRefresh(tokens);
+      } catch {
+        // ignore
+      }
+    } else {
+      currentTokens = null;
+      currentUser = null;
+      if (refreshTimer !== null) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      notifyListeners(null);
+    }
+  }
+}
+
+if (tokenChannel) {
+  tokenChannel.addEventListener('message', handleCrossTabMessage);
+}
+window.addEventListener('storage', handleStorageEvent);
 
 function scheduleTokenRefresh(tokens: AuthTokens): void {
   if (refreshTimer !== null) {
@@ -266,6 +398,7 @@ export async function logout(): Promise<void> {
   }
 
   clearStoredTokens();
+  broadcastLogout();
   currentUser = null;
 
   if (refreshTimer !== null) {
@@ -280,20 +413,53 @@ export async function refreshTokens(): Promise<AuthTokens | null> {
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
+  if (inFlightRefresh) {
+    return inFlightRefresh;
+  }
+
+  const isLockOwner = acquireRefreshLock();
+  if (!isLockOwner) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const updatedTokens = currentTokens || loadStoredTokens();
+    if (updatedTokens && !isTokenExpired(updatedTokens.accessToken)) {
+      return updatedTokens;
+    }
+    if (!acquireRefreshLock()) {
+      return null;
+    }
+  }
+
+  inFlightRefresh = doRefresh(tokens, isLockOwner);
+  try {
+    return await inFlightRefresh;
+  } finally {
+    inFlightRefresh = null;
+  }
+}
+
+async function doRefresh(tokens: AuthTokens, isLockOwner: boolean): Promise<AuthTokens | null> {
   try {
     const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
       refreshToken: tokens.refreshToken,
     });
 
     storeTokens(response.data.tokens);
+    broadcastTokens(response.data.tokens);
     scheduleTokenRefresh(response.data.tokens);
 
     return response.data.tokens;
   } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
+    if (isLockOwner) {
+      clearStoredTokens();
+      broadcastLogout();
+      currentUser = null;
+      notifyListeners(null);
+    }
     return null;
+  } finally {
+    if (isLockOwner) {
+      releaseRefreshLock();
+    }
   }
 }
 
