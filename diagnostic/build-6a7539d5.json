@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-06-23T09:58:51.143273+00:00",
+  "commit": "6a7539d5",
+  "diagnostic_logd": "diagnostic/build-6a7539d5.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "6d13e8eeeb86a13b6cc8",
+  "decrypt_command": "encryptly unpack diagnostic/build-6a7539d5.logd <outdir> --password 6d13e8eeeb86a13b6cc8",
+  "total_modules": 10,
+  "passed": 2,
+  "failed": 8,
+  "modules": [
+    {
+      "name": "backend",
+      "status": "FAIL",
+      "elapsed_seconds": 10.603,
+      "artifact": null,
+      "output": "\u001b[1m\u001b[92m   Compiling\u001b[0m libc v0.2.186\n\u001b[1m\u001b[92m   Compiling\u001b[0m syn v2.0.117\n\u001b[1m\u001b[92m   Compiling\u001b[0m bytes v1.11.1\n\u001b[1m\u001b[92m   Compiling\u001b[0m lock_api v0.4.14\n\u001b[1m\u001b[92m   Compiling\u001b[0m serde_core v1.0.228\n\u001b[1m\u001b[92m   Compiling\u001b[0m futures-sink v0.3.32\n\u001b[1m\u001b[92m   Compiling\u001b[0m itoa v1.0.18\n\u001b[1m\u001b[92m   Compiling\u001b[0m parking_lot_core v0.9.12\n\u001b[1m\u001b[92m   Compiling\u001b[0m errno v0.3.14\n\u001b[1m\u001b[92m   Compiling\u001b[0m serde v1.0.228\n\u001b[1m\u001b[92m   Compiling\u001b[0m once_cell v1.21.4\n\u001b[1m\u001b[92m   Compiling\u001b[0m shlex v2.0.1\n\u001b[1m\u001b[92m   Compiling\u001b[0m find-msvc-tools v0.1.9\n\u001b[1m\u001b[92m   Compiling\u001b[0m parking_lot v0.12.5\n\u001b[1m\u001b[92m   Compiling\u001b[0m cc v1.2.64\n\u001b[1m\u001b[92m   Compiling\u001b[0m signal-hook-registry v1.4.8\n\u001b[1m\u001b[92m   Compiling\u001b[0m socket2 v0.6.4\n\u001b[1m\u001b[92m   Compiling\u001b[0m mio v1.2.1\n\u001b[1m\u001b[92m   Compiling\u001b[0m vcpkg v0.2.15\n\u001b[1m\u001b[92m   Compiling\u001b[0m pkg-config v0.3.33\n\u001b[1m\u001b[92m   Compiling\u001b[0m slab v0.4.12\n\u001b[1m\u001b[92m   Compiling\u001b[0m tracing-core v0.1.36\n\u001b[1m\u001b[92m   Compiling\u001b[0m futures-channel v0.3.32\n\u001b[1m\u001b[92m   Compiling\u001b[0m openssl-sys v0.9.117\n\u001b[1m\u001b[92m   Compiling\u001b[0m writeable v0.6.3\n\u001b[1m\u001b[92m   Compiling\u001b[0m synstructure v0.13.2\n\u001b[1m\u001b[92m   Compiling\u001b[0m litemap v0.8.2\n\u001b[1m\u001b[33mwarning\u001b[0m: openssl-sys@0.9.117: Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.\n\u001b[1m\u001b[91merror\u001b[0m: failed to run custom build command for `openssl-sys v0.9.117`\n\nCaused by:\n  process didn't exit successfully: `/home/wulansari/projects/bounties/Kickama-Wulansari-Bounty2/backend/target/debug/build/openssl-sys-085d1b808c281a14/build-script-main` (exit status: 101)\n  --- stdout\n  cargo:rustc-check-cfg=cfg(osslconf, values(\"OPENSSL_NO_OCB\", \"OPENSSL_NO_SM4\", \"OPENSSL_NO_SEED\", \"OPENSSL_NO_CHACHA\", \"OPENSSL_NO_CAST\", \"OPENSSL_NO_IDEA\", \"OPENSSL_NO_CAMELLIA\", \"OPENSSL_NO_RC4\", \"OPENSSL_NO_BF\", \"OPENSSL_NO_PSK\", \"OPENSSL_NO_DEPRECATED_3_0\", \"OPENSSL_NO_SCRYPT\", \"OPENSSL_NO_SM3\", \"OPENSSL_NO_RMD160\", \"OPENSSL_NO_EC2M\", \"OPENSSL_NO_OCSP\", \"OPENSSL_NO_CMS\", \"OPENSSL_NO_COMP\", \"OPENSSL_NO_SOCK\", \"OPENSSL_NO_STDIO\", \"OPENSSL_NO_EC\", \"OPENSSL_NO_SSL3_METHOD\", \"OPENSSL_NO_KRB5\", \"OPENSSL_NO_TLSEXT\", \"OPENSSL_NO_SRP\", \"OPENSSL_NO_SRTP\", \"OPENSSL_NO_RFC3779\", \"OPENSSL_NO_SHA\", \"OPENSSL_NO_NEXTPROTONEG\", \"OPENSSL_NO_ENGINE\", \"OPENSSL_NO_BUF_FREELISTS\", \"OPENSSL_NO_RC2\"))\n  cargo:rustc-check-cfg=cfg(openssl)\n  cargo:rustc-check-cfg=cfg(libressl)\n  cargo:rustc-check-cfg=cfg(boringssl)\n  cargo:rustc-check-cfg=cfg(awslc)\n  cargo:rustc-check-cfg=cfg(awslc_pregenerated)\n  cargo:rustc-check-cfg=cfg(libressl250)\n  cargo:rustc-check-cfg=cfg(libressl251)\n  cargo:rustc-check-cfg=cfg(libressl252)\n  cargo:rustc-check-cfg=cfg(libressl261)\n  cargo:rustc-check-cfg=cfg(libressl270)\n  cargo:rustc-check-cfg=cfg(libressl271)\n  cargo:rustc-check-cfg=cfg(libressl273)\n  cargo:rustc-check-cfg=cfg(libressl280)\n  cargo:rustc-check-cfg=cfg(libressl281)\n  cargo:rustc-check-cfg=cfg(libressl291)\n  cargo:rustc-check-cfg=cfg(libressl310)\n  cargo:rustc-check-cfg=cfg(libressl321)\n  cargo:rustc-check-cfg=cfg(libressl332)\n  cargo:rustc-check-cfg=cfg(libressl340)\n  cargo:rustc-check-cfg=cfg(libressl350)\n  cargo:rustc-check-cfg=cfg(libressl360)\n  cargo:rustc-check-cfg=cfg(libressl361)\n  cargo:rustc-check-cfg=cfg(libressl370)\n  cargo:rustc-check-cfg=cfg(libressl380)\n  cargo:rustc-check-cfg=cfg(libressl381)\n  cargo:rustc-check-cfg=cfg(libressl382)\n  cargo:rustc-check-cfg=cfg(libressl390)\n  cargo:rustc-check-cfg=cfg(libressl400)\n  cargo:rustc-check-cfg=cfg(libressl410)\n  cargo:rustc-check-cfg=cfg(libressl420)\n  cargo:rustc-check-cfg=cfg(libressl430)\n  cargo:rustc-check-cfg=cfg(ossl101)\n  cargo:rustc-check-cfg=cfg(ossl102)\n  cargo:rustc-check-cfg=cfg(ossl102f)\n  cargo:rustc-check-cfg=cfg(ossl102h)\n  cargo:rustc-check-cfg=cfg(ossl110)\n  cargo:rustc-check-cfg=cfg(ossl110f)\n  cargo:rustc-check-cfg=cfg(ossl110g)\n  cargo:rustc-check-cfg=cfg(ossl110h)\n  cargo:rustc-check-cfg=cfg(ossl111)\n  cargo:rustc-check-cfg=cfg(ossl111b)\n  cargo:rustc-check-cfg=cfg(ossl111c)\n  cargo:rustc-check-cfg=cfg(ossl111d)\n  cargo:rustc-check-cfg=cfg(ossl300)\n  cargo:rustc-check-cfg=cfg(ossl310)\n  cargo:rustc-check-cfg=cfg(ossl320)\n  cargo:rustc-check-cfg=cfg(ossl330)\n  cargo:rustc-check-cfg=cfg(ossl340)\n  cargo:rustc-check-cfg=cfg(ossl400)\n  cargo:rerun-if-env-changed=X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR\n  X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR unset\n  cargo:rerun-if-env-changed=OPENSSL_LIB_DIR\n  OPENSSL_LIB_DIR unset\n  cargo:rerun-if-env-changed=X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR\n  X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR unset\n  cargo:rerun-if-env-changed=OPENSSL_INCLUDE_DIR\n  OPENSSL_INCLUDE_DIR unset\n  cargo:rerun-if-env-changed=X86_64_UNKNOWN_LINUX_GNU_OPENSSL_DIR\n  X86_64_UNKNOWN_LINUX_GNU_OPENSSL_DIR unset\n  cargo:rerun-if-env-changed=OPENSSL_DIR\n  OPENSSL_DIR unset\n  cargo:rerun-if-env-changed=OPENSSL_NO_PKG_CONFIG\n  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64-unknown-linux-gnu\n  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64_unknown_linux_gnu\n  cargo:rerun-if-env-changed=HOST_PKG_CONFIG\n  cargo:rerun-if-env-changed=PKG_CONFIG\n  cargo:rerun-if-env-changed=OPENSSL_STATIC\n  cargo:rerun-if-env-changed=OPENSSL_DYNAMIC\n  cargo:rerun-if-env-changed=PKG_CONFIG_ALL_STATIC\n  cargo:rerun-if-env-changed=PKG_CONFIG_ALL_DYNAMIC\n  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64-unknown-linux-gnu\n  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64_unknown_linux_gnu\n  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_PATH\n  cargo:rerun-if-env-changed=PKG_CONFIG_PATH\n  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64-unknown-linux-gnu\n  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64_unknown_linux_gnu\n  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_LIBDIR\n  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR\n  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64-unknown-linux-gnu\n  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64_unknown_linux_gnu\n  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_SYSROOT_DIR\n  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR\n\n\n  Could not find openssl via pkg-config:\n\n  pkg-config exited with status code 1\n  > PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags openssl\n\n  pkg-config output:\n    Package openssl was not found in the pkg-config search path.\n    Perhaps you should add the directory containing `openssl.pc'\n    to the PKG_CONFIG_PATH environment variable\n    Package 'openssl', required by 'virtual:world', not found\n\n  The system library `openssl` required by crate `openssl-sys` was not found.\n  The file `openssl.pc` needs to be installed and the PKG_CONFIG_PATH environment variable must contain its parent directory.\n  The PKG_CONFIG_PATH environment variable is not set.\n\n  HINT: if you have installed the library, try setting PKG_CONFIG_PATH to the directory containing `openssl.pc`.\n\n\n  cargo:warning=Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.\n\n  --- stderr\n\n\n  Could not find directory of OpenSSL installation, and this `-sys` crate cannot\n  proceed without this knowledge. If OpenSSL is installed and this crate had\n  trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the\n  compilation process.\n\n  Make sure you also have the development packages of openssl installed.\n  For example, `libssl-dev` on Ubuntu or `openssl-devel` on Fedora.\n\n  If you're in a situation where you think the directory *should* be found\n  automatically, please open a bug at https://github.com/rust-openssl/rust-openssl\n  and include information about your system as well as this message.\n\n  $HOST = x86_64-unknown-linux-gnu\n  $TARGET = x86_64-unknown-linux-gnu\n  openssl-sys = 0.9.117\n\n\n\u001b[1m\u001b[33mwarning\u001b[0m: build failed, waiting for other jobs to finish..."
+    },
+    {
+      "name": "frontend",
+      "status": "PASS",
+      "elapsed_seconds": 10.762,
+      "artifact": "/home/wulansari/projects/bounties/Kickama-Wulansari-Bounty2/frontend/dist",
+      "output": "> tent-frontend@0.0.0 build\n> tsc -b && vite build\n\nvite v6.4.3 building for production...\ntransforming...\n\u2713 100 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                   0.62 kB \u2502 gzip:  0.34 kB\ndist/assets/state-BkjSKDbY.js     8.91 kB \u2502 gzip:  3.54 kB \u2502 map:    57.15 kB\ndist/assets/vendor-CREcWLHI.js   48.93 kB \u2502 gzip: 17.25 kB \u2502 map:   481.27 kB\ndist/assets/index-CyxcoTyU.js   231.32 kB \u2502 gzip: 72.16 kB \u2502 map: 1,044.42 kB\n\u2713 built in 2.33s"
+    },
+    {
+      "name": "market",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'go'"
+    },
+    {
+      "name": "frailbox",
+      "status": "PASS",
+      "elapsed_seconds": 0.579,
+      "artifact": "/home/wulansari/projects/bounties/Kickama-Wulansari-Bounty2/frailbox/frailbox",
+      "output": "gcc -Wall -Wextra -Wpedantic -std=c2x -O2 -g -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -Iinclude -MMD -MP -c src/arena.c -o build/src/arena.o\ngcc -Wall -Wextra -Wpedantic -std=c2x -O2 -g -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -Iinclude -MMD -MP -c src/logger.c -o build/src/logger.o\ngcc -Wall -Wextra -Wpedantic -std=c2x -O2 -g -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -Iinclude -MMD -MP -c src/sandbox.c -o build/src/sandbox.o\ngcc -Wall -Wextra -Wpedantic -std=c2x -O2 -g -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -Iinclude -MMD -MP -c main.c -o build/main.o\ngcc -Wall -Wextra -Wpedantic -std=c2x -O2 -g -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -Iinclude build/src/arena.o build/src/logger.o build/src/sandbox.o build/main.o -o frailbox -pie -z relro -z now\nsrc/arena.c: In function \u2018arena_contains\u2019:\nsrc/arena.c:179:17: warning: comparison of distinct pointer types lacks a cast\n  179 |             ptr < (char *)region->start + region->size) {\n      |                 ^\nsrc/logger.c: In function \u2018log_message\u2019:\nsrc/logger.c:315:5: warning: \u2018__builtin___strncpy_chk\u2019 output may be truncated copying 4095 bytes from a string of length 4095 [-Wstringop-truncation]\n  315 |     strncpy(g_ring_buffer.entries[g_ring_buffer.head], message, MAX_LOG_LINE - 1);\n      |     ^"
+    },
+    {
+      "name": "engine",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'cmake'"
+    },
+    {
+      "name": "compliance",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'javac'"
+    },
+    {
+      "name": "v2-market-stream",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'ruby'"
+    },
+    {
+      "name": "nfc-scanner",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'luac'"
+    },
+    {
+      "name": "openapi-haskell",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'ghc'"
+    },
+    {
+      "name": "openapi-tools",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [Errno 2] No such file or directory: 'luac'"
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-6a7539d5.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}

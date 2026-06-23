@@ -120,6 +120,20 @@ class ImportResult:
 # IMPORTER
 # ---------------------------------------------------------------------------
 
+
+def validate_resource_name(resource_type: str, resource_name: str) -> bool:
+    """
+    Validate that the resource name does not contain hyphens and conforms
+    to basic Terraform identifier rules.
+    """
+    if "-" in resource_name:
+        logger.error(f"Invalid resource name '{resource_name}' for type '{resource_type}'. Hyphens are not allowed. Use underscores instead.")
+        return False
+    if not re.match(r"^[A-Za-z0-z_]+[A-Za-z0-z0-9_]*$", resource_name):
+        logger.error(f"Invalid resource name '{resource_name}' for type '{resource_type}'. Only alphanumeric characters and underscores are allowed.")
+        return False
+    return True
+
 class TerraformImporter:
     def __init__(self, state_dir: str = ".", terraform_binary: str = "terraform"):
         self.state_dir = Path(state_dir)
@@ -142,6 +156,15 @@ class TerraformImporter:
             return False
 
     def import_resource(self, resource: ResourceToImport) -> bool:
+        if not validate_resource_name(resource.resource_type, resource.resource_name):
+            self.results.append({
+                "address": f"{resource.resource_type}.{resource.resource_name}",
+                "resource_id": resource.resource_id,
+                "status": "failed",
+                "error": "Validation error: Invalid resource name",
+            })
+            return False
+
         address = f"{resource.resource_type}.{resource.resource_name}"
         cmd = [
             self.terraform_binary, "import",
@@ -208,6 +231,14 @@ class TerraformImporter:
         if dry_run:
             logger.info("DRY RUN - No resources will be imported")
             for resource in resources:
+                if not validate_resource_name(resource.resource_type, resource.resource_name):
+                    import_result.results.append({
+                        "address": f"{resource.resource_type}.{resource.resource_name}",
+                        "resource_id": resource.resource_id,
+                        "status": "validation_failed",
+                    })
+                    import_result.failure_count += 1
+                    continue
                 address = f"{resource.resource_type}.{resource.resource_name}"
                 logger.info(f"  Would import: {address} (ID: {resource.resource_id})")
                 import_result.results.append({
@@ -262,6 +293,9 @@ class TerraformImporter:
         lines = ["#!/bin/bash", "# Auto-generated Terraform import script", f"# Generated: {datetime.now().isoformat()}", ""]
 
         for resource in resources:
+            if not validate_resource_name(resource.resource_type, resource.resource_name):
+                logger.error(f"Skipping script generation for {resource.resource_type}.{resource.resource_name} due to invalid name")
+                continue
             address = f"{resource.resource_type}.{resource.resource_name}"
             lines.append(
                 f"terraform import -state={resource.state_file} {address} {resource.resource_id}"

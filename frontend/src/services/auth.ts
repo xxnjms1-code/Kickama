@@ -14,7 +14,7 @@
  * broadcast channel coordination.
  */
 
-import { get, post, del } from './api';
+import { get, post, del, put } from './api';
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -115,6 +115,50 @@ export interface Session {
   createdAt: string;
   lastActiveAt: string;
   isCurrent: boolean;
+}
+
+
+// ---------------------------------------------------------------------------
+// BROADCAST CHANNEL (Cross-tab synchronization)
+// ---------------------------------------------------------------------------
+const AUTH_CHANNEL_NAME = 'tot_auth_channel';
+let authChannel: BroadcastChannel | null = null;
+let refreshPromise: Promise<AuthTokens | null> | null = null;
+
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    authChannel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+    authChannel.onmessage = (event) => {
+      const { type, payload } = event.data;
+      if (type === 'TOKENS_REFRESHED' && payload) {
+        currentTokens = payload;
+        scheduleTokenRefresh(payload);
+        // Refresh API calls waiting on tokens can proceed
+      } else if (type === 'LOGOUT') {
+        clearStoredTokens();
+        currentUser = null;
+        if (refreshTimer !== null) {
+          clearTimeout(refreshTimer);
+          refreshTimer = null;
+        }
+        notifyListeners(null);
+      }
+    };
+  }
+} catch (e) {
+  // BroadcastChannel not available
+}
+
+function broadcastTokens(tokens: AuthTokens) {
+  if (authChannel) {
+    authChannel.postMessage({ type: 'TOKENS_REFRESHED', payload: tokens });
+  }
+}
+
+function broadcastLogout() {
+  if (authChannel) {
+    authChannel.postMessage({ type: 'LOGOUT' });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -280,21 +324,34 @@ export async function refreshTokens(): Promise<AuthTokens | null> {
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
-    });
-
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
-
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
-    return null;
+  // Coordinate same-tab refresh
+  if (refreshPromise) {
+    return refreshPromise;
   }
+
+  refreshPromise = (async () => {
+    try {
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
+        refreshToken: tokens.refreshToken,
+      });
+
+      storeTokens(response.data.tokens);
+      scheduleTokenRefresh(response.data.tokens);
+      broadcastTokens(response.data.tokens);
+
+      return response.data.tokens;
+    } catch {
+      clearStoredTokens();
+      currentUser = null;
+      notifyListeners(null);
+      broadcastLogout();
+      return null;
+    } finally {
+      refreshPromise = null; // Clear the inflight promise
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export async function getCurrentUser(): Promise<User | null> {
