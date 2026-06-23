@@ -9,9 +9,8 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * Cross-tab refresh coordination uses BroadcastChannel with a
+ * localStorage fallback for browsers that do not support it.
  */
 
 import { get, post, del } from './api';
@@ -124,11 +123,134 @@ export interface Session {
 const TOKEN_KEY = 'tot_auth_tokens';
 const USER_KEY = 'tot_user_data';
 const REFRESH_THRESHOLD = 60; // seconds before expiry to attempt refresh
+const BROADCAST_CHANNEL_NAME = 'tot_auth_refresh_channel';
+const REFRESH_LOCK_KEY = 'tot_auth_refresh_lock';
 
 let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+
+// ---------------------------------------------------------------------------
+// CROSS-TAB REFRESH COORDINATION
+// ---------------------------------------------------------------------------
+
+/** Shared in-flight refresh promise so concurrent callers in the same tab
+ *  wait on one network request. */
+let inflightRefreshPromise: Promise<AuthTokens | null> | null = null;
+
+/** BroadcastChannel instance for cross-tab token updates. Created lazily
+ *  because some environments (SSR, workers) do not support it. */
+let broadcastChannel: BroadcastChannel | null = null;
+
+function getBroadcastChannel(): BroadcastChannel | null {
+  if (broadcastChannel) return broadcastChannel;
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      broadcastChannel.addEventListener('message', onBroadcastMessage);
+      return broadcastChannel;
+    }
+  } catch {
+    // BroadcastChannel not available
+  }
+  return null;
+}
+
+/** Handle an incoming token update from another tab. */
+function onBroadcastMessage(event: MessageEvent): void {
+  const data = event.data;
+  if (!data || data.type !== 'token_update') return;
+
+  if (data.tokens) {
+    storeTokens(data.tokens);
+    scheduleTokenRefresh(data.tokens);
+  } else if (data.type === 'logout') {
+    clearStoredTokens();
+    currentUser = null;
+    if (refreshTimer !== null) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+    notifyListeners(null);
+  }
+}
+
+/** Broadcast new tokens to other open tabs. Falls back to a localStorage
+ *  ping when BroadcastChannel is unavailable. */
+function broadcastTokens(tokens: AuthTokens): void {
+  const channel = getBroadcastChannel();
+  if (channel) {
+    channel.postMessage({ type: 'token_update', tokens });
+  } else {
+    // Fallback: store a nonce so other tabs detect the update via storage event
+    try {
+      localStorage.setItem(REFRESH_LOCK_KEY, String(Date.now()));
+      localStorage.removeItem(REFRESH_LOCK_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** Acquire a cross-tab refresh lease via localStorage atomics.
+ *  Returns true if *this* tab should perform the network refresh. */
+function acquireRefreshLease(): boolean {
+  try {
+    const now = Date.now();
+    const existing = localStorage.getItem(REFRESH_LOCK_KEY);
+    if (existing) {
+      const parsed = parseInt(existing, 10);
+      // If the lock is younger than 15s another tab is refreshing
+      if (!isNaN(parsed) && now - parsed < 15_000) {
+        return false;
+      }
+    }
+    localStorage.setItem(REFRESH_LOCK_KEY, String(now));
+    return true;
+  } catch {
+    return true; // If localStorage is broken, proceed (single-tab fallback)
+  }
+}
+
+/** Release the cross-tab refresh lease. */
+function releaseRefreshLease(): void {
+  try {
+    localStorage.removeItem(REFRESH_LOCK_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/** Listen for localStorage changes made by other tabs (fallback path). */
+function setupStorageListener(): void {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('storage', (event: StorageEvent) => {
+    // When another tab stores new tokens, adopt them
+    if (event.key === TOKEN_KEY && event.newValue) {
+      try {
+        const tokens = JSON.parse(event.newValue) as AuthTokens;
+        if (tokens.accessToken) {
+          storeTokens(tokens);
+          scheduleTokenRefresh(tokens);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // When another tab clears tokens (logout), follow suit
+    if (event.key === TOKEN_KEY && event.newValue === null) {
+      clearStoredTokens();
+      currentUser = null;
+      if (refreshTimer !== null) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      notifyListeners(null);
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -273,6 +395,12 @@ export async function logout(): Promise<void> {
     refreshTimer = null;
   }
 
+  // Notify other tabs about logout
+  const channel = getBroadcastChannel();
+  if (channel) {
+    channel.postMessage({ type: 'logout' });
+  }
+
   notifyListeners(null);
 }
 
@@ -280,21 +408,96 @@ export async function refreshTokens(): Promise<AuthTokens | null> {
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
-    });
-
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
-
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
-    return null;
+  /** Same-tab deduplication: reuse an in-flight refresh. */
+  if (inflightRefreshPromise) {
+    return inflightRefreshPromise;
   }
+
+  /** Cross-tab coordination: only one tab performs the network refresh. */
+  const isLeader = acquireRefreshLease();
+  if (!isLeader) {
+    // Another tab is refreshing. Poll localStorage for updated tokens.
+    return pollForStoredTokens(tokens);
+  }
+
+  inflightRefreshPromise = (async (): Promise<AuthTokens | null> => {
+    try {
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
+        refreshToken: tokens.refreshToken,
+      });
+
+      storeTokens(response.data.tokens);
+      scheduleTokenRefresh(response.data.tokens);
+
+      // Notify other tabs
+      broadcastTokens(response.data.tokens);
+
+      return response.data.tokens;
+    } catch {
+      // Refresh failed -- do NOT clear tokens here. Another tab may
+      // have a successful refresh in flight or already stored valid
+      // tokens. Only clear if *no* valid tokens remain in storage.
+      const stored = loadStoredTokens();
+      if (!stored || isTokenExpired(stored.accessToken)) {
+        clearStoredTokens();
+        currentUser = null;
+        notifyListeners(null);
+      }
+      return null;
+    } finally {
+      inflightRefreshPromise = null;
+      releaseRefreshLease();
+    }
+  })();
+
+  return inflightRefreshPromise;
+}
+
+/** Poll localStorage at short intervals while another tab owns the refresh
+ *  lease. Returns updated tokens once they appear, or null on timeout. */
+async function pollForStoredTokens(
+  existingTokens: AuthTokens,
+): Promise<AuthTokens | null> {
+  const POLL_INTERVAL = 150; // ms
+  const POLL_TIMEOUT = 10_000; // ms
+  const startedAt = Date.now();
+
+  return new Promise((resolve) => {
+    const poll = (): void => {
+      try {
+        const stored = localStorage.getItem(TOKEN_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as AuthTokens;
+          // Only accept tokens that are newer than what we had
+          if (
+            parsed.accessToken &&
+            parsed.accessToken !== existingTokens.accessToken
+          ) {
+            storeTokens(parsed);
+            scheduleTokenRefresh(parsed);
+            resolve(parsed);
+            return;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (Date.now() - startedAt > POLL_TIMEOUT) {
+        // Timeout: fall back to using our existing tokens if still valid
+        resolve(
+          existingTokens && !isTokenExpired(existingTokens.accessToken)
+            ? existingTokens
+            : null,
+        );
+        return;
+      }
+
+      setTimeout(poll, POLL_INTERVAL);
+    };
+
+    poll();
+  });
 }
 
 export async function getCurrentUser(): Promise<User | null> {
@@ -448,3 +651,6 @@ export function hasRole(role: UserRole | UserRole[]): boolean {
   }
   return currentUser.role === role;
 }
+
+// Initialize cross-tab listeners on import
+setupStorageListener();
