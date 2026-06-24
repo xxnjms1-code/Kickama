@@ -5,7 +5,9 @@ import (
     "sync"
 )
 
+// Collector represents a market analytics collector.
 type Collector struct {
+    // ... existing fields ...
     stopChan chan struct{}
     flushChan chan struct{}
     stopped bool
@@ -14,37 +16,37 @@ type Collector struct {
 
 func (c *Collector) Start(ctx context.Context) {
     c.mu.Lock()
-    if !c.stopped {
+    defer c.mu.Unlock()
+
+    if c.stopped {
         return
     }
-    c.stopped = false
-    c.mu.Unlock()
 
-    c.flushChan = make(chan struct{})
+    if c.flushChan == nil {
+        c.flushChan = make(chan struct{})
+    }
+
     go func() {
-        for {
-            select {
-            case <-ctx.Done():
-                return
-            case <-c.flushChan:
-                // flush logic here
-            }
-        }
+        // ... existing flush logic ...
+        close(c.flushChan)
     }()
 }
 
 func (c *Collector) Stop() {
     c.mu.Lock()
-    if c.stopped {
-        c.mu.Unlock()
-        return
+    defer c.mu.Unlock()
+
+    if !c.stopped {
+        close(c.flushChan)
+        c.stopped = true
     }
-    c.stopped = true
-    close(c.flushChan)
-    c.mu.Unlock()
 }
 
 func (c *Collector) Restart() {
-    c.Stop()
-    c.Start(context.Background())
+    c.mu.Lock()
+    defer c.mu.Unlock()
+
+    if c.stopped {
+        c.Start(context.Background())
+    }
 }
