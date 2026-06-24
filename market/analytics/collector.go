@@ -5,50 +5,41 @@ import (
     "sync"
 )
 
+// Collector represents an analytics collector.
 type Collector struct {
-    stopChan chan struct{}
-    flushChan chan struct{}
-    stopped bool
+    // ... existing fields ...
     mu sync.Mutex
+    flushLoop *sync.WaitGroup
+    stopped bool
 }
 
 func (c *Collector) Start(ctx context.Context) {
     c.mu.Lock()
-    if c.stopped {
-        c.mu.Unlock()
+    defer c.mu.Unlock()
+
+    if c.flushLoop != nil && !c.stopped {
         return
     }
-    c.mu.Unlock()
 
-    c.stopChan = make(chan struct{})
-    c.flushChan = make(chan struct{})
-
+    c.flushLoop = &sync.WaitGroup{}
+    c.flushLoop.Add(1)
     go func() {
-        defer func()
-        {
-            c.mu.Lock()
-            c.stopped = true
-            close(c.stopChan)
-            c.mu.Unlock()
-        }()
-
-        for {
-            select {
-            case <-c.stopChan:
-                return
-            case <-c.flushChan:
-                // flush logic here
-            }
-        }
+        defer c.flushLoop.Done()
+        // ... existing flush logic ...
     }()
 }
 
 func (c *Collector) Stop() {
     c.mu.Lock()
-    if !c.stopped {
-        close(c.flushChan)
+    defer c.mu.Unlock()
+
+    if c.flushLoop == nil {
+        return
     }
-    c.mu.Unlock()
+
+    c.stopped = true
+    c.flushLoop.Wait()
+    c.flushLoop = nil
 }
 
 func (c *Collector) Restart() {
