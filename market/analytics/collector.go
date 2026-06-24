@@ -6,31 +6,47 @@ import (
 )
 
 type Collector struct {
-    // ... existing fields ...
-    mu sync.Mutex
-    flushLoop *sync.WaitGroup
+    stopChan chan struct{}
+    flushChan chan struct{}
     stopped bool
+    mu sync.Mutex
 }
 
 func (c *Collector) Start(ctx context.Context) {
     c.mu.Lock()
-    if c.flushLoop != nil && !c.stopped {
+    if c.stopped {
+        c.mu.Unlock()
         return
     }
-    c.flushLoop = &sync.WaitGroup{}
-    c.flushLoop.Add(1)
-    go func() {
-        defer c.flushLoop.Done()
-        // ... existing flush logic ...
-    }()
     c.mu.Unlock()
+
+    c.stopChan = make(chan struct{})
+    c.flushChan = make(chan struct{})
+
+    go func() {
+        defer func()
+        {
+            c.mu.Lock()
+            c.stopped = true
+            close(c.stopChan)
+            c.mu.Unlock()
+        }()
+
+        for {
+            select {
+            case <-c.stopChan:
+                return
+            case <-c.flushChan:
+                // flush logic here
+            }
+        }
+    }()
 }
 
 func (c *Collector) Stop() {
     c.mu.Lock()
-    if c.flushLoop != nil {
-        c.flushLoop.Done()
-        c.flushLoop = nil
+    if !c.stopped {
+        close(c.flushChan)
     }
     c.mu.Unlock()
 }
