@@ -1,52 +1,68 @@
 package market
 
-import (
-    "context"
-    "sync"
-)
-
-type Collector struct {
-    mu sync.Mutex
-    started bool
-    stopCh chan struct{}
-    flushCh chan struct{}
-}
+cache := make(map[string]*Collector)
 
 func (c *Collector) Start(ctx context.Context) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-
-    if c.started {
+    if c == nil || c.stopped {
         return
     }
 
-    c.started = true
-    c.stopCh = make(chan struct{})
-    c.flushCh = make(chan struct{})
+    if c.flushGoroutine != nil {
+        return
+    }
 
-    go c.flushLoop(ctx)
+    c.flushGoroutine = &goroutineWrapper{
+        func() {
+            for {
+                select {
+                case <-ctx.Done():
+                    return
+                case <-c.flushSignal:
+                    // flush logic here
+                }
+                // flush logic here
+            }
+        },
+        func() {
+            c.flushSignal = make(chan struct{})
+        },
+        func() {
+            close(c.flushSignal)
+        },
+    }
+
+    go c.flushGoroutine.Start()
 }
 
 func (c *Collector) Stop() {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-
-    if !c.started {
+    if c == nil || c.stopped {
         return
     }
 
-    close(c.stopCh)
-    c.started = false
+    if c.flushGoroutine != nil {
+        c.flushGoroutine.Stop()
+        c.flushGoroutine = nil
+    }
+
+    c.stopped = true
 }
 
-func (c *Collector) flushLoop(ctx context.Context) {
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case <-c.stopCh:
-            return
-        }
-        // flush logic here
-    }
+func (c *Collector) Restart() {
+    c.Stop()
+    c.Start(context.Background())
+}
+
+type goroutineWrapper struct {
+    start func()
+    init func()
+    stop func()
+}
+
+func (g *goroutineWrapper) Start() {
+    g.init()
+    go g.start()
+}
+
+func (g *goroutineWrapper) Stop() {
+    g.stop()
 }
