@@ -14,39 +14,50 @@ type Collector struct {
 
 func (c *Collector) Start(ctx context.Context) {
     c.mu.Lock()
-    defer c.mu.Unlock()
-
-    if !c.stopped {
+    if c.stopped {
+        c.mu.Unlock()
         return
     }
+    c.mu.Unlock()
 
-    c.stopped = false
-    c.flushChan = make(chan struct{}, 1)
-    go func() {
-        for {
-            select {
-            case <-c.flushChan:
-                // flush logic here
-            case <-ctx.Done():
-                return
-            }
-        }
-    }()
+    c.stopChan = make(chan struct{})
+    c.flushChan = make(chan struct{})
+
+    go c.flushLoop(ctx)
 }
 
 func (c *Collector) Stop() {
     c.mu.Lock()
-    defer c.mu.Unlock()
-
-    if c.stopped {
-        return
+    if !c.stopped {
+        close(c.stopChan)
+        c.stopped = true
     }
-
-    c.stopped = true
-    close(c.flushChan)
+    c.mu.Unlock()
 }
 
-func (c *Collector) Restart() {
-    c.Stop()
-    c.Start(context.Background())
+func (c *Collector) flushLoop(ctx context.Context) {
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-c.stopChan:
+            return
+        case <-time.After(10 * time.Second):
+            // flush logic here
+        }
+    }
+}
+
+func (c *Collector) restart() {
+    c.mu.Lock()
+    if !c.stopped {
+        c.mu.Unlock()
+        return
+    }
+    c.mu.Unlock()
+
+    c.stopChan = make(chan struct{})
+    c.flushChan = make(chan struct{})
+
+    go c.flushLoop(context.Background())
 }
