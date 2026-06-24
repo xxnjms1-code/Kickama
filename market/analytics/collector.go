@@ -5,34 +5,47 @@ import (
     "sync"
 )
 
-type collector struct {
+type Collector struct {
     stopChan chan struct{}
-    stopOnce sync.Once
+    flushChan chan struct{}
     stopped bool
+    mu sync.Mutex
 }
 
-func (c *collector) Start(ctx context.Context) {
-    c.stopOnce.Do(func() {
-        c.stopChan = make(chan struct{})
-        go c.flushLoop(ctx)
-    })
+func (c *Collector) Start(ctx context.Context) {
+    c.mu.Lock()
+    if c.stopped {
+        c.mu.Unlock()
+        return
+    }
+    c.mu.Unlock()
+
+    c.stopChan = make(chan struct{})
+    c.flushChan = make(chan struct{})
+
+    go func() {
+        for {
+            select {
+            case <-ctx.Done():
+                return
+            case <-c.stopChan:
+                return
+            }
+            // flush logic here
+        }
+    }()
 }
 
-func (c *collector) Stop() {
-    c.stopOnce.Do(func() {
+func (c *Collector) Stop() {
+    c.mu.Lock()
+    if !c.stopped {
         close(c.stopChan)
         c.stopped = true
-    })
+    }
+    c.mu.Unlock()
 }
 
-func (c *collector) flushLoop(ctx context.Context) {
-    for {
-        select {
-        case <-ctx.Done():
-            return
-        case <-c.stopChan:
-            return
-        }
-        // flush logic here
-    }
+func (c *Collector) Restart() {
+    c.Stop()
+    c.Start(context.Background())
 }
