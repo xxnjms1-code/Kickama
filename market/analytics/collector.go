@@ -14,30 +14,20 @@ type Collector struct {
 
 func (c *Collector) Start(ctx context.Context) {
     c.mu.Lock()
-    defer c.mu.Unlock()
-
     if !c.stopped {
         return
     }
-
     c.stopped = false
-    c.stopChan = make(chan struct{})
-    c.flushChan = make(chan struct{})
+    c.mu.Unlock()
 
+    c.flushChan = make(chan struct{}, 1)
     go func() {
-        defer func()
-        select {
-        case <-ctx.Done():
-            return
-        case <-c.stopChan:
-            return
-        }
         for {
             select {
-            case <-c.flushChan:
-                // flush logic here
             case <-ctx.Done():
                 return
+            case <-c.flushChan:
+                // flush logic here
             }
         }
     }()
@@ -45,14 +35,13 @@ func (c *Collector) Start(ctx context.Context) {
 
 func (c *Collector) Stop() {
     c.mu.Lock()
-    defer c.mu.Unlock()
-
     if c.stopped {
+        c.mu.Unlock()
         return
     }
-
     c.stopped = true
-    close(c.stopChan)
+    close(c.flushChan)
+    c.mu.Unlock()
 }
 
 func (c *Collector) Restart() {
