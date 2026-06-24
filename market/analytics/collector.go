@@ -20,11 +20,15 @@ func (c *Collector) Start(ctx context.Context) {
     }
     c.mu.Unlock()
 
+    c.stopChan = make(chan struct{})
     c.flushChan = make(chan struct{})
+
     go func() {
         for {
             select {
             case <-ctx.Done():
+                return
+            case <-c.stopChan:
                 return
             case <-c.flushChan:
                 // flush logic here
@@ -36,7 +40,7 @@ func (c *Collector) Start(ctx context.Context) {
 func (c *Collector) Stop() {
     c.mu.Lock()
     if !c.stopped {
-        close(c.flushChan)
+        close(c.stopChan)
         c.stopped = true
     }
     c.mu.Unlock()
