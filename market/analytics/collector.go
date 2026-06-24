@@ -6,25 +6,24 @@ import (
 )
 
 type Collector struct {
+    // ... existing fields ...
     stopChan chan struct{}
     flushChan chan struct{}
-    stopped bool
+    started bool
 }
 
 func (c *Collector) Start(ctx context.Context) {
-    if c.stopped {
-        c.stopped = false
-        c.stopChan = make(chan struct{})
-        c.flushChan = make(chan struct{})
+    if c.started {
+        return
     }
+    c.started = true
+    c.stopChan = make(chan struct{})
+    c.flushChan = make(chan struct{})
     go c.flushLoop(ctx)
 }
 
 func (c *Collector) Stop() {
-    if !c.stopped {
-        c.stopped = true
-        close(c.flushChan)
-    }
+    close(c.stopChan)
 }
 
 func (c *Collector) flushLoop(ctx context.Context) {
@@ -32,14 +31,15 @@ func (c *Collector) flushLoop(ctx context.Context) {
         select {
         case <-ctx.Done():
             return
+        case <-c.stopChan:
+            return
         case <-c.flushChan:
             // flush logic here
-        }
         }
     }
 }
 
-func (c *Collector) restart() {
+func (c *Collector) restart(ctx context.Context) {
     c.Stop()
-    c.Start()
+    c.Start(ctx)
 }
