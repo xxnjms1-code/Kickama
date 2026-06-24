@@ -7,32 +7,38 @@ import (
 
 type Collector struct {
     // ... existing fields ...
-    flushLoop *sync.Once
     stopChan chan struct{}
+    flushWG  sync.WaitGroup
 }
 
 func (c *Collector) Start(ctx context.Context) {
-    c.flushLoop.Do(func() {
-        // ... existing flush logic ...
-        go func() {
-            for {
-                select {
-                    case <-ctx.Done():
-                        return
-                    case <-c.stopChan:
-                        return
-                }
-                // ... existing flush logic ...
-            }
-        }()
-    })
+    if c.stopChan != nil { // check if already started
+        return
+    }
+    c.stopChan = make(chan struct{})
+    c.flushWG.Add(1)
+    go c.flushLoop(ctx)
 }
 
 func (c *Collector) Stop() {
+    if c.stopChan == nil { // check if already stopped
+        return
+    }
     close(c.stopChan)
+    c.flushWG.Wait()
+    c.flushWG.Done()
+    c.stopChan = nil
 }
 
-func (c *Collector) Restart() {
-    c.Stop()
-    c.Start(context.Background())
+func (c *Collector) flushLoop(ctx context.Context) {
+    defer c.flushWG.Done()
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-c.stopChan:
+            return
+        }
+        // ... existing flush logic ...
+    }
 }
