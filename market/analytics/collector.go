@@ -299,6 +299,8 @@ type Collector struct {
 	flushInterval time.Duration
 	maxBacklog    int
 	stopCh        chan struct{}
+	doneCh        chan struct{}
+	running       bool
 	flushed       int64
 	errors        int64
 	dropped       int64
@@ -326,6 +328,7 @@ func NewCollector() *Collector {
 		flushInterval: 10 * time.Second,
 		maxBacklog:    10000,
 		stopCh:        make(chan struct{}),
+		doneCh:        make(chan struct{}),
 	}
 }
 
@@ -455,14 +458,32 @@ func (c *Collector) RecordHistogram(name string, value float64, tags ...MetricTa
 	})
 }
 
-// Start begins the background flush loop. It spawns a goroutine that
-// periodically flushes collected metrics to the backend. The flush
-// loop will stop when the context is cancelled or Stop() is called.
-// NOTE: Calling Start() multiple times will spawn multiple flush
-// goroutines, causing duplicate flushes. This is a known issue.
-// TODO: Make Start() idempotent.
+// Start begins the background flush loop. Repeated calls are idempotent:
+// a collector has at most one active flush loop at a time. The loop will stop
+// when the context is cancelled or Stop() is called.
 func (c *Collector) Start(ctx context.Context) {
+	c.mu.Lock()
+	if c.running {
+		c.mu.Unlock()
+		return
+	}
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	c.stopCh = stopCh
+	c.doneCh = doneCh
+	c.running = true
+	c.mu.Unlock()
+
 	go func() {
+		defer func() {
+			c.mu.Lock()
+			if c.stopCh == stopCh {
+				c.running = false
+			}
+			c.mu.Unlock()
+			close(doneCh)
+		}()
+
 		// Tick immediately to flush any bootstrapped metrics
 		c.flush(ctx)
 		ticker := time.NewTicker(c.flushInterval)
@@ -473,7 +494,7 @@ func (c *Collector) Start(ctx context.Context) {
 				// Final flush before exiting
 				c.flush(context.Background())
 				return
-			case <-c.stopCh:
+			case <-stopCh:
 				return
 			case <-ticker.C:
 				c.flush(ctx)
@@ -486,9 +507,19 @@ func (c *Collector) Start(ctx context.Context) {
 // If you want a final flush, call Flush() before Stop().
 // TODO: Add a Drain() method that performs a final flush and then stops.
 func (c *Collector) Stop() {
+	c.mu.Lock()
+	stopCh := c.stopCh
+	running := c.running
+	c.mu.Unlock()
+
+	if !running {
+		return
+	}
+
 	select {
-	case c.stopCh <- struct{}{}:
+	case <-stopCh:
 	default:
+		close(stopCh)
 	}
 }
 
