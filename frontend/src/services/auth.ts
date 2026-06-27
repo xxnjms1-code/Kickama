@@ -9,9 +9,9 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * Cross-tab refresh coordination uses BroadcastChannel with a
+ * localStorage fallback so concurrent refresh attempts share one
+ * in-flight request and token updates propagate safely.
  */
 
 import { get, post, del } from './api';
@@ -129,6 +129,116 @@ let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+
+// Cross-tab refresh coordination
+let inflightRefreshPromise: Promise<AuthTokens | null> | null = null;
+const REFRESH_CHANNEL_NAME = 'tot_auth_refresh';
+const REFRESH_LOCK_KEY = 'tot_refresh_lock';
+const REFRESH_RESULT_KEY = 'tot_refresh_result';
+const REFRESH_LOCK_TTL_MS = 10_000;
+
+let broadcastChannel: BroadcastChannel | null = null;
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    broadcastChannel = new BroadcastChannel(REFRESH_CHANNEL_NAME);
+  }
+} catch {
+  // BroadcastChannel not supported
+}
+
+// ---------------------------------------------------------------------------
+// CROSS-TAB REFRESH HELPERS
+// ---------------------------------------------------------------------------
+
+function acquireRefreshLock(): boolean {
+  try {
+    const now = Date.now();
+    const raw = localStorage.getItem(REFRESH_LOCK_KEY);
+    if (raw) {
+      const lockTime = parseInt(raw, 10);
+      if (now - lockTime < REFRESH_LOCK_TTL_MS) {
+        return false;
+      }
+    }
+    localStorage.setItem(REFRESH_LOCK_KEY, String(now));
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function releaseRefreshLock(): void {
+  try {
+    localStorage.removeItem(REFRESH_LOCK_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function broadcastRefreshResult(tokens: AuthTokens | null): void {
+  try {
+    if (tokens) {
+      localStorage.setItem(REFRESH_RESULT_KEY, JSON.stringify({ tokens, ts: Date.now() }));
+    } else {
+      localStorage.removeItem(REFRESH_RESULT_KEY);
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    broadcastChannel?.postMessage({
+      type: tokens ? 'refresh-success' : 'refresh-failure',
+      tokens,
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function listenForRefreshResult(
+  resolve: (tokens: AuthTokens | null) => void,
+): () => void {
+  let resolved = false;
+
+  const safeResolve = (tokens: AuthTokens | null) => {
+    if (!resolved) {
+      resolved = true;
+      resolve(tokens);
+    }
+  };
+
+  const onMessage = (event: MessageEvent) => {
+    if (event.data?.type === 'refresh-success') {
+      safeResolve(event.data.tokens);
+    } else if (event.data?.type === 'refresh-failure') {
+      safeResolve(null);
+    }
+  };
+
+  broadcastChannel?.addEventListener('message', onMessage);
+
+  // localStorage fallback for browsers without BroadcastChannel
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === REFRESH_RESULT_KEY && event.newValue) {
+      try {
+        const { tokens } = JSON.parse(event.newValue);
+        safeResolve(tokens);
+      } catch {
+        safeResolve(null);
+      }
+    } else if (event.key === REFRESH_RESULT_KEY && event.newValue === null) {
+      safeResolve(null);
+    }
+  };
+  window.addEventListener('storage', onStorage);
+
+  return () => {
+    broadcastChannel?.removeEventListener('message', onMessage);
+    window.removeEventListener('storage', onStorage);
+    safeResolve(null);
+  };
+}
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -280,21 +390,65 @@ export async function refreshTokens(): Promise<AuthTokens | null> {
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
+  // If another caller in this tab is already refreshing, share the result
+  if (inflightRefreshPromise) {
+    return inflightRefreshPromise;
+  }
+
+  inflightRefreshPromise = (async () => {
+    const cleanup = listenForRefreshResult((broadcastTokens) => {
+      if (broadcastTokens) {
+        storeTokens(broadcastTokens);
+        scheduleTokenRefresh(broadcastTokens);
+      }
+      inflightRefreshPromise = null;
     });
 
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
+    try {
+      if (!acquireRefreshLock()) {
+        // Another tab holds the lock; wait for broadcast result
+        return await new Promise<AuthTokens | null>((resolve) => {
+          const fallback = setTimeout(() => {
+            cleanup();
+            resolve(null);
+          }, REFRESH_LOCK_TTL_MS);
 
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
-    return null;
-  }
+          const innerCleanup = listenForRefreshResult((t) => {
+            clearTimeout(fallback);
+            cleanup();
+            resolve(t);
+          });
+
+          // Override cleanup to also remove the inner listener
+          const origCleanup = cleanup;
+          void origCleanup;
+        });
+      }
+
+      // This tab won the lock — perform the refresh
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
+        refreshToken: tokens.refreshToken,
+      });
+
+      storeTokens(response.data.tokens);
+      scheduleTokenRefresh(response.data.tokens);
+      broadcastRefreshResult(response.data.tokens);
+
+      return response.data.tokens;
+    } catch {
+      broadcastRefreshResult(null);
+      clearStoredTokens();
+      currentUser = null;
+      notifyListeners(null);
+      return null;
+    } finally {
+      releaseRefreshLock();
+      cleanup();
+      inflightRefreshPromise = null;
+    }
+  })();
+
+  return inflightRefreshPromise;
 }
 
 export async function getCurrentUser(): Promise<User | null> {
