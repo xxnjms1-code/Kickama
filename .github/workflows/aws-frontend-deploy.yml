@@ -1,0 +1,33 @@
+name: Deploy ggloop.io to AWS (Zero Downtime)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET_NAME: ggloop.io
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to S3 (Zero Downtime Sync)
+        working-directory: ./site
+        run: aws s3 sync . s3://${{ env.S3_BUCKET_NAME }} --delete
+
+      - name: Invalidate CloudFront Cache
+        run: aws cloudfront create-invalidation --distribution-id E2HHP4NGMUAM92 --paths "/*"

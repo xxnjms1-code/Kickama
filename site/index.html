@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Open-source anti-cheat SDK for game developers. Process scanning, focus tracking, and webhook reporting. Free forever, MIT licensed.">
+    <title>GG Loop — Open Source Anti-Cheat SDK</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <span class="logo-icon">∞</span>
+                <span class="logo-text">GG Loop</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="https://github.com/djjrip/anti-cheat-sdk" target="_blank">GitHub</a>
+                <a href="https://discord.gg/ApVRpc2VJa" target="_blank" class="nav-discord">Discord</a>
+                <a href="#checkout" class="nav-cta">Pre-Order Now</a>
+            </div>
+            <button class="nav-mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero" id="hero">
+        <div class="hero-bg">
+            <div class="hero-gradient"></div>
+            <div class="hero-grid"></div>
+        </div>
+        <div class="hero-container">
+            <div class="hero-badge">
+                <span class="badge-dot"></span>
+                Open Source & Free Forever
+            </div>
+            <h1 class="hero-title">
+                Game Integrity.<br>
+                <span class="hero-gradient-text">Zero Overhead.</span>
+            </h1>
+            <p class="hero-subtitle">
+                A lightweight process scanning and active-window focus tracking SDK. 
+                Drop it in, protect your game, ship faster. 
+                <strong>MIT licensed. No vendor lock-in.</strong>
+            </p>
+            <div class="hero-actions">
+                <a href="#checkout" class="btn btn-primary btn-lg">
+                    Pre-Order Cloud
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="https://github.com/djjrip/anti-cheat-sdk" target="_blank" class="btn btn-ghost btn-lg">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 0C4.477 0 0 4.477 0 10c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0110 4.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C17.137 18.163 20 14.418 20 10c0-5.523-4.477-10-10-10z"/></svg>
+                    View on GitHub
+                </a>
+            </div>
+            <div class="hero-stats">
+                <div class="stat">
+                    <span class="stat-value">~0ms</span>
+                    <span class="stat-label">Performance Overhead</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <span class="stat-value">2</span>
+                    <span class="stat-label">Platforms (Win + macOS)</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <span class="stat-value">1</span>
+                    <span class="stat-label">Line to Initialize</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat">
+                    <span class="stat-value">MIT</span>
+                    <span class="stat-label">License</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Preview -->
+    <section class="code-section">
+        <div class="container">
+            <div class="code-window">
+                <div class="code-header">
+                    <div class="code-dots">
+                        <span class="dot red"></span>
+                        <span class="dot yellow"></span>
+                        <span class="dot green"></span>
+                    </div>
+                    <span class="code-filename">game-session.ts</span>
+                </div>
+                <pre class="code-body"><code><span class="kw">import</span> { <span class="cls">AntiCheatSDK</span> } <span class="kw">from</span> <span class="str">'@djjrip/anti-cheat-sdk'</span>;
+
+<span class="cm">// Initialize once on game start</span>
+<span class="kw">const</span> guard = <span class="kw">new</span> <span class="cls">AntiCheatSDK</span>({
+  <span class="prop">sessionId</span>: player.id,
+  <span class="prop">webhookUrl</span>: <span class="str">'https://api.ggloop.io/events'</span>,
+  <span class="prop">scanInterval</span>: <span class="num">5000</span>,
+});
+
+guard.<span class="fn">on</span>(<span class="str">'violation'</span>, (event) => {
+  session.<span class="fn">flagPlayer</span>(event.sessionId, event.reason);
+});
+
+guard.<span class="fn">start</span>();</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Core Capabilities</span>
+                <h2 class="section-title">Everything your game needs.<br>Nothing it doesn't.</h2>
+                <p class="section-subtitle">Built from the ground up to be invisible to the player and lethal to cheaters.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <h3>Process Scanner</h3>
+                    <p>Real-time scanning of running processes against a configurable blocklist. Detects Cheat Engine, aimbots, memory editors, and custom exploit tools.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🪟</div>
+                    <h3>Active Window Focus</h3>
+                    <p>Detect when a player alt-tabs to a known cheat tool, macro software, or overlay injector mid-session. Flag or disconnect instantly.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Zero-Overhead Architecture</h3>
+                    <p>Runs in a dedicated background thread. No blocking calls on the game loop. Proven to add &lt;0.1% CPU overhead on both Windows and macOS.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Tamper Detection</h3>
+                    <p>Detects debugger attachment, memory patching, and known injection patterns. Triggers configurable callbacks when integrity is violated.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📡</div>
+                    <h3>Webhook Reporting</h3>
+                    <p>POST violation events to your backend, Discord server, or admin dashboard in real time. Full session context included in every payload.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🧩</div>
+                    <h3>Drop-In Integration</h3>
+                    <p>Single initialization call. Works with Unity, Unreal, Electron, and native apps. TypeScript, C, and C++ bindings included.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Pricing</span>
+                <h2 class="section-title">Free to use. Pay to scale.</h2>
+                <p class="section-subtitle">The SDK is open source and free forever. GG Loop Cloud gives you the dashboard, analytics, and managed updates.</p>
+            </div>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Open Source</h3>
+                        <div class="pricing-price">
+                            <span class="price-amount">Free</span>
+                            <span class="price-period">forever</span>
+                        </div>
+                    </div>
+                    <p class="pricing-desc">The full SDK. Self-hosted. No limits.</p>
+                    <ul class="pricing-features">
+                        <li>Full SDK source code (MIT)</li>
+                        <li>Process scanning + focus tracking</li>
+                        <li>Self-hosted webhook reporting</li>
+                        <li>Community support (Discord)</li>
+                        <li>Unlimited games & CCU</li>
+                    </ul>
+                    <a href="https://github.com/djjrip/anti-cheat-sdk" target="_blank" class="btn btn-outline btn-full">
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 0C4.477 0 0 4.477 0 10c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0110 4.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C17.137 18.163 20 14.418 20 10c0-5.523-4.477-10-10-10z"/></svg>
+                        View on GitHub
+                    </a>
+                </div>
+                <div class="pricing-card pricing-featured">
+                    <div class="pricing-badge">Most Popular</div>
+                    <div class="pricing-header">
+                        <h3>Cloud</h3>
+                        <div class="pricing-price">
+                            <span class="price-currency">$</span>
+                            <span class="price-amount">29</span>
+                            <span class="price-period">/mo</span>
+                        </div>
+                    </div>
+                    <p class="pricing-desc">The dashboard and analytics layer.</p>
+                    <ul class="pricing-features">
+                        <li>Everything in Open Source</li>
+                        <li>ggloop.io analytics dashboard</li>
+                        <li>Managed blocklist updates</li>
+                        <li>Discord & Slack alerts</li>
+                        <li>Up to 5,000 CCU</li>
+                        <li>Email support</li>
+                    </ul>
+                    <a href="#checkout" class="btn btn-primary btn-full">Pre-Order Now</a>
+                </div>
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Team</h3>
+                        <div class="pricing-price">
+                            <span class="price-currency">$</span>
+                            <span class="price-amount">99</span>
+                            <span class="price-period">/mo</span>
+                        </div>
+                    </div>
+                    <p class="pricing-desc">For studios with multiple live titles.</p>
+                    <ul class="pricing-features">
+                        <li>Everything in Cloud</li>
+                        <li>Multi-game management</li>
+                        <li>Team seats & roles</li>
+                        <li>Advanced behavioral flags</li>
+                        <li>Up to 50,000 CCU</li>
+                        <li>Priority support</li>
+                    </ul>
+                    <a href="#checkout" class="btn btn-outline btn-full">Pre-Order Now</a>
+                </div>
+                <div class="pricing-card pricing-enterprise">
+                    <div class="pricing-header">
+                        <h3>Enterprise</h3>
+                        <div class="pricing-price">
+                            <span class="price-amount">Custom</span>
+                        </div>
+                    </div>
+                    <p class="pricing-desc">For publishers and esports orgs.</p>
+                    <ul class="pricing-features">
+                        <li>Everything in Team</li>
+                        <li>Custom detection rules</li>
+                        <li>SLA guarantee (99.9%)</li>
+                        <li>Unlimited CCU</li>
+                        <li>Dedicated Slack channel</li>
+                        <li>Custom integration support</li>
+                    </ul>
+                    <a href="mailto:jayson@ggloop.io" class="btn btn-outline btn-full">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Checkout -->
+    <section class="waitlist" id="checkout">
+        <div class="container">
+            <div class="waitlist-card">
+                <div class="waitlist-content">
+                    <h2>Ship a cleaner game. Automate your growth.</h2>
+                    <p>Get instant access to the GG Loop Anti-Cheat Dashboard and the Empire Hub Automation Suite.</p>
+                    <a href="https://buy.stripe.com/YOUR_STRIPE_LINK_HERE" class="btn btn-primary btn-lg" style="margin-top: 20px; display: inline-flex;">
+                        Pre-Order Now ($29)
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style="margin-left: 8px;"><path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+                    <p class="waitlist-note" style="margin-top: 15px;">Secure checkout powered by Stripe.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-icon">∞</span>
+                    <span class="logo-text">GG Loop</span>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/djjrip/anti-cheat-sdk" target="_blank">GitHub</a>
+                    <a href="https://discord.gg/ApVRpc2VJa" target="_blank">Discord</a>
+                    <a href="mailto:jayson@ggloop.io">Contact</a>
+                </div>
+                <p class="footer-copy">© 2026 Jayson Quindao — GG Loop. Open source, MIT licensed.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Navbar scroll effect
+        const nav = document.getElementById('nav');
+        window.addEventListener('scroll', () => {
+            nav.classList.toggle('scrolled', window.scrollY > 50);
+        });
+
+        // Mobile menu toggle
+        const mobileToggle = document.getElementById('mobileToggle');
+        const navLinks = document.querySelector('.nav-links');
+        mobileToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('open');
+            mobileToggle.classList.toggle('active');
+        });
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    navLinks.classList.remove('open');
+                    mobileToggle.classList.remove('active');
+                }
+            });
+        });
+
+        // Checkout redirect handling (placeholder for when link is added)
+        const checkoutBtns = document.querySelectorAll('a[href="#checkout"]');
+        checkoutBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const target = document.querySelector('#checkout');
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        });
+
+        // Intersection Observer for fade-in animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.feature-card, .pricing-card, .stat').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

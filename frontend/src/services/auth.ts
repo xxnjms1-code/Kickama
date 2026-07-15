@@ -130,6 +130,40 @@ let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
 
+let refreshPromise: Promise<AuthTokens | null> | null = null;
+const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('auth_refresh') : null;
+
+if (bc) {
+  bc.addEventListener('message', (event) => {
+    if (event.data.type === 'TOKENS_REFRESHED') {
+      const tokens = event.data.tokens;
+      currentTokens = tokens;
+      scheduleTokenRefresh(tokens);
+    } else if (event.data.type === 'REFRESH_FAILED') {
+      currentTokens = null;
+      currentUser = null;
+      notifyListeners(null);
+    }
+  });
+}
+
+// Fallback for localStorage events (across tabs)
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === TOKEN_KEY) {
+      if (e.newValue) {
+        const tokens = JSON.parse(e.newValue);
+        currentTokens = tokens;
+        scheduleTokenRefresh(tokens);
+      } else {
+        currentTokens = null;
+        currentUser = null;
+        notifyListeners(null);
+      }
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // HELPERS
 // ---------------------------------------------------------------------------
@@ -277,8 +311,77 @@ export async function logout(): Promise<void> {
 }
 
 export async function refreshTokens(): Promise<AuthTokens | null> {
+  if (refreshPromise) return refreshPromise;
+
+  const lockKey = 'tot_refresh_lock';
+  const now = Date.now();
+  let lockTime = 0;
+  try {
+    const lockStr = localStorage.getItem(lockKey);
+    lockTime = lockStr ? parseInt(lockStr, 10) : 0;
+  } catch {}
+
+  if (now - lockTime < 5000) {
+    // Another tab is refreshing, wait for broadcast or storage event
+    refreshPromise = new Promise((resolve) => {
+      let resolved = false;
+      const cleanup = () => {
+        if (bc) bc.removeEventListener('message', onMessage);
+        if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage);
+      };
+
+      const onMessage = (event: MessageEvent) => {
+        if (event.data.type === 'TOKENS_REFRESHED') {
+          resolved = true;
+          cleanup();
+          resolve(event.data.tokens);
+        } else if (event.data.type === 'REFRESH_FAILED') {
+          resolved = true;
+          cleanup();
+          resolve(null);
+        }
+      };
+
+      const onStorage = (e: StorageEvent) => {
+        if (e.key === TOKEN_KEY) {
+          resolved = true;
+          cleanup();
+          resolve(e.newValue ? JSON.parse(e.newValue) : null);
+        }
+      };
+
+      if (bc) bc.addEventListener('message', onMessage);
+      if (typeof window !== 'undefined') window.addEventListener('storage', onStorage);
+
+      setTimeout(() => {
+        if (!resolved) {
+          cleanup();
+          resolve(refreshTokensImpl());
+        }
+      }, 5000);
+    });
+
+    return refreshPromise.finally(() => { refreshPromise = null; });
+  }
+
+  try {
+    localStorage.setItem(lockKey, now.toString());
+  } catch {}
+
+  refreshPromise = refreshTokensImpl().finally(() => {
+    refreshPromise = null;
+    try { localStorage.removeItem(lockKey); } catch {}
+  });
+
+  return refreshPromise;
+}
+
+async function refreshTokensImpl(): Promise<AuthTokens | null> {
   const tokens = currentTokens || loadStoredTokens();
-  if (!tokens?.refreshToken) return null;
+  if (!tokens?.refreshToken) {
+    if (bc) bc.postMessage({ type: 'REFRESH_FAILED' });
+    return null;
+  }
 
   try {
     const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
@@ -287,12 +390,15 @@ export async function refreshTokens(): Promise<AuthTokens | null> {
 
     storeTokens(response.data.tokens);
     scheduleTokenRefresh(response.data.tokens);
+    
+    if (bc) bc.postMessage({ type: 'TOKENS_REFRESHED', tokens: response.data.tokens });
 
     return response.data.tokens;
   } catch {
     clearStoredTokens();
     currentUser = null;
     notifyListeners(null);
+    if (bc) bc.postMessage({ type: 'REFRESH_FAILED' });
     return null;
   }
 }

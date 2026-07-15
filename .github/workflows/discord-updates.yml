@@ -1,0 +1,22 @@
+name: Discord Channel Sync
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Update to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          AUTHOR="${{ github.actor }}"
+          MESSAGE="${{ github.event.head_commit.message }}"
+          URL="${{ github.event.head_commit.url }}"
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"content\": \"🚀 **Live Update!** $AUTHOR just pushed new code to GG Loop.\\n\\n**Changes:** $MESSAGE\\n[View the code update]($URL)\"}" \
+               $DISCORD_WEBHOOK
