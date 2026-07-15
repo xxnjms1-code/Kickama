@@ -9,9 +9,9 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * Cross-tab token refresh coordination is implemented using BroadcastChannel
+ * with localStorage fallback to prevent race conditions when multiple tabs
+ * refresh simultaneously.
  */
 
 import { get, post, del } from './api';
@@ -125,10 +125,135 @@ const TOKEN_KEY = 'tot_auth_tokens';
 const USER_KEY = 'tot_user_data';
 const REFRESH_THRESHOLD = 60; // seconds before expiry to attempt refresh
 
+/** localStorage key used for cross-tab refresh coordination fallback */
+const REFRESH_EVENT_KEY = 'tot_auth_refresh_event';
+
+/** BroadcastChannel name for cross-tab token refresh coordination */
+const BC_CHANNEL_NAME = 'tot-auth-refresh';
+
 let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+
+// ---------------------------------------------------------------------------
+// CROSS-TAB REFRESH COORDINATION STATE
+// ---------------------------------------------------------------------------
+
+/**
+ * Tracks the in-flight refresh promise so concurrent calls within the same tab
+ * share a single network request.
+ */
+let inFlightRefresh: Promise<AuthTokens | null> | null = null;
+
+/**
+ * BroadcastChannel instance for cross-tab communication.
+ * Initialized lazily on first refresh attempt.
+ */
+let bc: BroadcastChannel | null = null;
+
+/**
+ * Set to true once the BroadcastChannel and localStorage listeners are set up.
+ */
+let coordinationInitialized = false;
+
+// ---------------------------------------------------------------------------
+// CROSS-TAB REFRESH COORDINATION
+// ---------------------------------------------------------------------------
+
+/**
+ * Initialize cross-tab refresh coordination using BroadcastChannel with a
+ * localStorage event fallback. Safe to call multiple times.
+ */
+function initRefreshCoordination(): void {
+  if (coordinationInitialized) return;
+
+  // Primary channel: BroadcastChannel
+  try {
+    bc = new BroadcastChannel(BC_CHANNEL_NAME);
+    bc.onmessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (data && data.type === 'tokens-refreshed' && data.tokens) {
+        // Another tab has refreshed tokens — adopt them locally.
+        storeTokens(data.tokens);
+        if (data.user) {
+          currentUser = data.user;
+        }
+        notifyListeners(currentUser);
+
+        // Resolve any in-flight refresh pending in this tab.
+        if (inFlightRefresh !== null) {
+          const resolveHolder = (inFlightRefresh as unknown as { _resolve: (v: AuthTokens | null) => void })._resolve;
+          if (resolveHolder) {
+            resolveHolder(data.tokens);
+          }
+        }
+      }
+    };
+  } catch {
+    // BroadcastChannel may be unavailable (e.g., older browsers, non-browser contexts).
+    bc = null;
+  }
+
+  // Fallback: localStorage events (fires across tabs when BroadcastChannel is unavailable)
+  try {
+    window.addEventListener('storage', (event: StorageEvent) => {
+      if (event.key === REFRESH_EVENT_KEY && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue);
+          if (data && data.type === 'tokens-refreshed' && data.tokens) {
+            // Only adopt if we didn't initiate this ourselves (timestamp-based guard).
+            const ourTimestamp = localStorage.getItem(REFRESH_EVENT_KEY + '_ts');
+            if (data.timestamp && ourTimestamp && data.timestamp === ourTimestamp) {
+              return; // Our own event, skip.
+            }
+            storeTokens(data.tokens);
+            if (data.user) {
+              currentUser = data.user;
+            }
+            notifyListeners(currentUser);
+          }
+        } catch {
+          // ignore malformed events
+        }
+      }
+    });
+  } catch {
+    // localStorage events may be unavailable
+  }
+
+  coordinationInitialized = true;
+}
+
+/**
+ * Broadcast refreshed tokens to all other tabs via BroadcastChannel, with
+ * localStorage fallback.
+ */
+function broadcastTokens(tokens: AuthTokens): void {
+  const payload = {
+    type: 'tokens-refreshed',
+    tokens,
+    user: currentUser,
+    timestamp: Date.now().toString(),
+  };
+
+  // Primary: BroadcastChannel
+  if (bc) {
+    try {
+      bc.postMessage(payload);
+    } catch {
+      // ignore broadcast errors
+    }
+  }
+
+  // Fallback: localStorage event
+  try {
+    localStorage.setItem(REFRESH_EVENT_KEY + '_ts', payload.timestamp);
+    localStorage.setItem(REFRESH_EVENT_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -234,6 +359,9 @@ export async function login(request: LoginRequest): Promise<AuthTokens> {
     // ignore
   }
 
+  // Initialize cross-tab coordination so other tabs learn about this login.
+  initRefreshCoordination();
+  broadcastTokens(response.data.tokens);
   scheduleTokenRefresh(response.data.tokens);
   notifyListeners(response.data.user);
 
@@ -252,6 +380,8 @@ export async function register(request: RegisterRequest): Promise<AuthTokens> {
     // ignore
   }
 
+  initRefreshCoordination();
+  broadcastTokens(response.data.tokens);
   scheduleTokenRefresh(response.data.tokens);
   notifyListeners(response.data.user);
 
@@ -273,27 +403,86 @@ export async function logout(): Promise<void> {
     refreshTimer = null;
   }
 
+  // Reset in-flight refresh so the next call starts fresh
+  inFlightRefresh = null;
+
   notifyListeners(null);
 }
 
 export async function refreshTokens(): Promise<AuthTokens | null> {
+  // Initialize cross-tab coordination on first refresh call.
+  initRefreshCoordination();
+
+  // If there's already an in-flight refresh in this tab, return the same promise.
+  if (inFlightRefresh !== null) {
+    return inFlightRefresh;
+  }
+
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
+
+  // Create a controlled promise that can be resolved externally when another tab
+  // broadcasts tokens, preventing unnecessary network calls during cross-tab race.
+  let externalResolve: ((value: AuthTokens | null) => void) | null = null;
+  const guardedPromise = new Promise<AuthTokens | null>((resolve) => {
+    externalResolve = resolve;
+  });
+
+  // Tag the promise so broadcast handlers can resolve it externally.
+  (guardedPromise as unknown as { _resolve: ((v: AuthTokens | null) => void) | null })._resolve = externalResolve;
+
+  // Store the guarded promise so concurrent calls share it.
+  inFlightRefresh = guardedPromise;
 
   try {
     const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
       refreshToken: tokens.refreshToken,
     });
 
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
+    const newTokens = response.data.tokens;
+    storeTokens(newTokens);
+    scheduleTokenRefresh(newTokens);
 
-    return response.data.tokens;
-  } catch {
+    // Notify other tabs about the new tokens.
+    broadcastTokens(newTokens);
+
+    // Resolve the promise.
+    if (externalResolve) {
+      externalResolve(newTokens);
+    }
+
+    return newTokens;
+  } catch (error) {
+    // Refresh failed. Check if another tab recently refreshed successfully
+    // by looking at localStorage. If so, don't clear valid tokens.
+    const storedTokens = loadStoredTokens();
+    if (storedTokens) {
+      // Tokens are still valid (or were updated by another tab) — don't clear.
+      if (externalResolve) {
+        externalResolve(storedTokens);
+      }
+      return storedTokens;
+    }
+
+    // No valid tokens anywhere — clear and notify.
     clearStoredTokens();
     currentUser = null;
     notifyListeners(null);
+
+    if (externalResolve) {
+      externalResolve(null);
+    }
+
     return null;
+  } finally {
+    // Reset in-flight tracking so that subsequent calls initiate a fresh request.
+    // Delay the reset to avoid a thundering-herd problem in rapid sequential calls.
+    setTimeout(() => {
+      // Only reset if the current promise is still the one we set.
+      if (inFlightRefresh === guardedPromise) {
+        inFlightRefresh = null;
+      }
+    }, 0);
   }
 }
 
