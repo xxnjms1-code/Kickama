@@ -9,12 +9,14 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * Cross-tab refresh coordination is handled via BroadcastChannel with
+ * a localStorage fallback. When multiple tabs attempt to refresh tokens
+ * simultaneously, only one tab performs the network request and others
+ * adopt the result.
  */
 
 import { get, post, del } from './api';
+import { coordinateRefresh, initCrossTabAuth, cleanup as cleanupCrossTab } from './crossTabAuth';
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -129,6 +131,24 @@ let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+let crossTabInitialized = false;
+
+function ensureCrossTabInit(): void {
+  if (crossTabInitialized) return;
+  if (typeof window === 'undefined') return;
+  crossTabInitialized = true;
+
+  initCrossTabAuth((tokens) => {
+    // Another tab refreshed tokens — adopt them
+    currentTokens = tokens;
+    try {
+      localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+    } catch {
+      // ignore
+    }
+    scheduleTokenRefresh(tokens);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -223,6 +243,8 @@ function scheduleTokenRefresh(tokens: AuthTokens): void {
 // ---------------------------------------------------------------------------
 
 export async function login(request: LoginRequest): Promise<AuthTokens> {
+  ensureCrossTabInit();
+
   const response = await post<{ tokens: AuthTokens; user: User }>('/auth/login', request);
 
   storeTokens(response.data.tokens);
@@ -273,28 +295,35 @@ export async function logout(): Promise<void> {
     refreshTimer = null;
   }
 
+  cleanupCrossTab();
+  crossTabInitialized = false;
+
   notifyListeners(null);
 }
 
 export async function refreshTokens(): Promise<AuthTokens | null> {
+  ensureCrossTabInit();
+
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
-    });
+  return coordinateRefresh(async () => {
+    try {
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
+        refreshToken: tokens.refreshToken,
+      });
 
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
+      storeTokens(response.data.tokens);
+      scheduleTokenRefresh(response.data.tokens);
 
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
-    return null;
-  }
+      return response.data.tokens;
+    } catch {
+      clearStoredTokens();
+      currentUser = null;
+      notifyListeners(null);
+      return null;
+    }
+  });
 }
 
 export async function getCurrentUser(): Promise<User | null> {
