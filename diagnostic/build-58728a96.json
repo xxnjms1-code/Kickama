@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-07-21T02:58:09.109971+00:00",
+  "commit": "58728a96",
+  "diagnostic_logd": "diagnostic\\build-58728a96.logd",
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": false,
+  "chunk_size_bytes": null,
+  "password": "6ac86a8873eaf8548b0b",
+  "decrypt_command": "encryptly unpack diagnostic\\build-58728a96.logd <outdir> --password 6ac86a8873eaf8548b0b",
+  "total_modules": 1,
+  "passed": 1,
+  "failed": 0,
+  "modules": [
+    {
+      "name": "market",
+      "status": "PASS",
+      "elapsed_seconds": 2.347,
+      "artifact": "C:\\Users\\5325\\Documents\\Codex\\2026-07-16\\goal-generame-5-dolares-y-haz\\work\\kickama-prize-lab\\market\\market",
+      "output": ""
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic\\build-58728a96.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}

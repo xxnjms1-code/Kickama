@@ -15,12 +15,9 @@ package analytics
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -294,11 +291,14 @@ type MetricSample struct {
 // TODO: Fix the race condition in the batch flush logic.
 type Collector struct {
 	mu            sync.RWMutex
+	lifecycleMu   sync.Mutex
 	samples       []MetricSample
 	batchSize     int
 	flushInterval time.Duration
 	maxBacklog    int
 	stopCh        chan struct{}
+	doneCh        chan struct{}
+	running       bool
 	flushed       int64
 	errors        int64
 	dropped       int64
@@ -325,7 +325,6 @@ func NewCollector() *Collector {
 		batchSize:     100,
 		flushInterval: 10 * time.Second,
 		maxBacklog:    10000,
-		stopCh:        make(chan struct{}),
 	}
 }
 
@@ -458,38 +457,82 @@ func (c *Collector) RecordHistogram(name string, value float64, tags ...MetricTa
 // Start begins the background flush loop. It spawns a goroutine that
 // periodically flushes collected metrics to the backend. The flush
 // loop will stop when the context is cancelled or Stop() is called.
-// NOTE: Calling Start() multiple times will spawn multiple flush
-// goroutines, causing duplicate flushes. This is a known issue.
-// TODO: Make Start() idempotent.
+// Repeated or concurrent Start calls are idempotent. A collector owns at most
+// one flush loop at a time, and a restart waits for a stopping loop to exit so
+// it never reuses a stale stop signal.
 func (c *Collector) Start(ctx context.Context) {
-	go func() {
-		// Tick immediately to flush any bootstrapped metrics
-		c.flush(ctx)
-		ticker := time.NewTicker(c.flushInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				// Final flush before exiting
-				c.flush(context.Background())
-				return
-			case <-c.stopCh:
-				return
-			case <-ticker.C:
-				c.flush(ctx)
-			}
+	for {
+		c.lifecycleMu.Lock()
+		if c.running {
+			c.lifecycleMu.Unlock()
+			return
 		}
+		if c.doneCh != nil {
+			doneCh := c.doneCh
+			c.lifecycleMu.Unlock()
+			select {
+			case <-doneCh:
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+
+		stopCh := make(chan struct{})
+		doneCh := make(chan struct{})
+		c.stopCh = stopCh
+		c.doneCh = doneCh
+		c.running = true
+		c.lifecycleMu.Unlock()
+
+		go c.runFlushLoop(ctx, stopCh, doneCh)
+		return
+	}
+}
+
+func (c *Collector) runFlushLoop(ctx context.Context, stopCh <-chan struct{}, doneCh chan struct{}) {
+	defer func() {
+		c.lifecycleMu.Lock()
+		if c.doneCh == doneCh {
+			c.running = false
+			c.stopCh = nil
+			c.doneCh = nil
+		}
+		c.lifecycleMu.Unlock()
+		close(doneCh)
 	}()
+
+	// Tick immediately to flush any bootstrapped metrics.
+	c.flush(ctx)
+
+	ticker := time.NewTicker(c.flushInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// Final flush before exiting.
+			c.flush(context.Background())
+			return
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			c.flush(ctx)
+		}
+	}
 }
 
 // Stop signals the flush loop to stop. It does NOT perform a final flush.
 // If you want a final flush, call Flush() before Stop().
 // TODO: Add a Drain() method that performs a final flush and then stops.
 func (c *Collector) Stop() {
-	select {
-	case c.stopCh <- struct{}{}:
-	default:
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+	if !c.running || c.stopCh == nil {
+		return
 	}
+	close(c.stopCh)
+	c.stopCh = nil
+	c.running = false
 }
 
 // Flush immediately flushes all buffered metrics to the backend.
