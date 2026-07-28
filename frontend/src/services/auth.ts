@@ -76,6 +76,18 @@ export interface ChartPreferences {
 
 export type UserRole = 'admin' | 'trader' | 'analyst' | 'viewer' | 'api_only';
 
+// ==================== VORTEX MUTEX & SYNC LAYER ====================
+const AUTH_LOCK_NAME = 'tot-auth-refresh-mutex';
+const authSyncChannel = new BroadcastChannel('tot-auth-sync');
+let activeRefreshPromise: Promise<any> | null = null;
+
+authSyncChannel.onmessage = (event) => {
+    if (event.data.type === 'REFRESH_COMPLETE') {
+        console.debug('[Vortex] Auth state synchronized from adjacent tab.');
+    }
+};
+// ===================================================================
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
