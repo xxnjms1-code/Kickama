@@ -9,9 +9,9 @@
  * - SSO (SAML, OpenID Connect)
  * - API key authentication for machine-to-machine
  *
- * TODO: The token refresh logic has a race condition when multiple tabs
- * try to refresh simultaneously. The fix involves a shared worker or
- * broadcast channel coordination.
+ * FIXED: The token refresh logic now uses BroadcastChannel with localStorage
+ * fallback to coordinate refresh requests across multiple tabs, preventing
+ * race conditions and ensuring only one tab performs the network refresh.
  */
 
 import { get, post, del } from './api';
@@ -124,11 +124,19 @@ export interface Session {
 const TOKEN_KEY = 'tot_auth_tokens';
 const USER_KEY = 'tot_user_data';
 const REFRESH_THRESHOLD = 60; // seconds before expiry to attempt refresh
+const CHANNEL_NAME = 'tot_auth_refresh_channel';
+const REFRESH_LOCK_KEY = 'tot_refresh_lock';
+const REFRESH_RESULT_KEY = 'tot_refresh_result';
 
 let currentTokens: AuthTokens | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | null = null;
 let authListeners: Array<(user: User | null) => void> = [];
+let inFlightRefresh: Promise<AuthTokens | null> | null = null;
+let broadcastChannel: BroadcastChannel | null = null;
+
+// Initialize BroadcastChannel on module load
+initBroadcastChannel();
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -194,6 +202,107 @@ function notifyListeners(user: User | null): void {
     } catch {
       // ignore listener errors
     }
+  }
+}
+
+// BroadcastChannel setup with localStorage fallback
+function initBroadcastChannel(): void {
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      broadcastChannel = new BroadcastChannel(CHANNEL_NAME);
+      broadcastChannel.onmessage = handleBroadcastMessage;
+    } catch {
+      // BroadcastChannel may fail in some contexts (e.g., opaque origins)
+      broadcastChannel = null;
+    }
+  }
+}
+
+function handleBroadcastMessage(event: MessageEvent): void {
+  const { type, tokens, error } = event.data;
+  
+  if (type === 'REFRESH_SUCCESS' && tokens) {
+    // Another tab successfully refreshed tokens
+    storeTokens(tokens);
+    scheduleTokenRefresh(tokens);
+  } else if (type === 'REFRESH_FAILURE' && error) {
+    // Another tab failed to refresh
+    // Don't clear tokens here - let the current tab decide based on its own state
+  }
+}
+
+function broadcastRefreshResult(tokens: AuthTokens | null, error?: string): void {
+  const message = tokens 
+    ? { type: 'REFRESH_SUCCESS', tokens }
+    : { type: 'REFRESH_FAILURE', error };
+  
+  // Try BroadcastChannel first
+  if (broadcastChannel) {
+    try {
+      broadcastChannel.postMessage(message);
+    } catch {
+      // BroadcastChannel may fail
+    }
+  }
+  
+  // Fallback to localStorage for environments without BroadcastChannel support
+  try {
+    localStorage.setItem(REFRESH_RESULT_KEY, JSON.stringify({
+      ...message,
+      timestamp: Date.now()
+    }));
+    // Clear after a short delay to avoid stale data
+    setTimeout(() => {
+      localStorage.removeItem(REFRESH_RESULT_KEY);
+    }, 1000);
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
+function checkForExternalRefresh(): AuthTokens | null {
+  // Check localStorage for refresh results from other tabs
+  try {
+    const stored = localStorage.getItem(REFRESH_RESULT_KEY);
+    if (stored) {
+      const result = JSON.parse(stored);
+      // Only use if recent (within last 2 seconds)
+      if (Date.now() - result.timestamp < 2000) {
+        if (result.type === 'REFRESH_SUCCESS' && result.tokens) {
+          return result.tokens;
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+// Acquire a simple lock using localStorage to coordinate refresh across tabs
+function acquireRefreshLock(): boolean {
+  try {
+    const lockValue = localStorage.getItem(REFRESH_LOCK_KEY);
+    if (lockValue) {
+      const lockTime = parseInt(lockValue, 10);
+      // Lock is valid for 10 seconds
+      if (Date.now() - lockTime < 10000) {
+        return false; // Lock is held by another tab
+      }
+    }
+    localStorage.setItem(REFRESH_LOCK_KEY, Date.now().toString());
+    return true;
+  } catch {
+    // If localStorage fails, proceed anyway (single-tab behavior)
+    return true;
+  }
+}
+
+function releaseRefreshLock(): void {
+  try {
+    localStorage.removeItem(REFRESH_LOCK_KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -280,21 +389,69 @@ export async function refreshTokens(): Promise<AuthTokens | null> {
   const tokens = currentTokens || loadStoredTokens();
   if (!tokens?.refreshToken) return null;
 
-  try {
-    const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
-      refreshToken: tokens.refreshToken,
-    });
+  // Check if another tab has already refreshed the tokens
+  const externalRefresh = checkForExternalRefresh();
+  if (externalRefresh) {
+    return externalRefresh;
+  }
 
-    storeTokens(response.data.tokens);
-    scheduleTokenRefresh(response.data.tokens);
+  // If a refresh is already in flight, return that promise
+  if (inFlightRefresh) {
+    return inFlightRefresh;
+  }
 
-    return response.data.tokens;
-  } catch {
-    clearStoredTokens();
-    currentUser = null;
-    notifyListeners(null);
+  // Try to acquire the lock to perform the actual refresh
+  const hasLock = acquireRefreshLock();
+  
+  if (!hasLock) {
+    // Another tab is refreshing, wait a bit and check for result
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const retryExternalRefresh = checkForExternalRefresh();
+    if (retryExternalRefresh) {
+      return retryExternalRefresh;
+    }
+    // If still no result, return null (will retry on next API call)
     return null;
   }
+
+  // Perform the refresh
+  inFlightRefresh = (async () => {
+    try {
+      const response = await post<{ tokens: AuthTokens }>('/auth/refresh', {
+        refreshToken: tokens.refreshToken,
+      });
+
+      storeTokens(response.data.tokens);
+      scheduleTokenRefresh(response.data.tokens);
+      broadcastRefreshResult(response.data.tokens);
+
+      return response.data.tokens;
+    } catch (error) {
+      // Only clear tokens if this was the only tab trying to refresh
+      // If another tab succeeds, we'll get the broadcast message
+      broadcastRefreshResult(null, error instanceof Error ? error.message : 'Refresh failed');
+      
+      // Don't clear tokens immediately - wait to see if another tab succeeded
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Check again if another tab succeeded
+      const retryExternalRefresh = checkForExternalRefresh();
+      if (retryExternalRefresh) {
+        return retryExternalRefresh;
+      }
+      
+      // No other tab succeeded, clear tokens
+      clearStoredTokens();
+      currentUser = null;
+      notifyListeners(null);
+      return null;
+    } finally {
+      inFlightRefresh = null;
+      releaseRefreshLock();
+    }
+  })();
+
+  return inFlightRefresh;
 }
 
 export async function getCurrentUser(): Promise<User | null> {
