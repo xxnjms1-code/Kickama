@@ -156,6 +156,18 @@ export function AssetSelector({
     [groups, filteredAssets]
   );
 
+  // Reset highlighted index when search query or favorites filter changes
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [searchQuery, showFavoritesOnly]);
+
+  // Trigger search callback when search query changes
+  useEffect(() => {
+    if (onSearch) {
+      onSearch(searchQuery);
+    }
+  }, [searchQuery, onSearch]);
+
   // Open/close
   const open = useCallback(() => {
     if (!disabled) {
