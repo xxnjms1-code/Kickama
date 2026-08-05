@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-08-05T05:18:55.998436+00:00",
+  "commit": "3774a0c8",
+  "diagnostic_logd": [
+    "diagnostic\\build-3774a0c8-part001.logd",
+    "diagnostic\\build-3774a0c8-part002.logd",
+    "diagnostic\\build-3774a0c8-part003.logd",
+    "diagnostic\\build-3774a0c8-part004.logd",
+    "diagnostic\\build-3774a0c8-part005.logd",
+    "diagnostic\\build-3774a0c8-part006.logd",
+    "diagnostic\\build-3774a0c8-part007.logd",
+    "diagnostic\\build-3774a0c8-part008.logd",
+    "diagnostic\\build-3774a0c8-part009.logd",
+    "diagnostic\\build-3774a0c8-part010.logd",
+    "diagnostic\\build-3774a0c8-part011.logd",
+    "diagnostic\\build-3774a0c8-part012.logd",
+    "diagnostic\\build-3774a0c8-part013.logd",
+    "diagnostic\\build-3774a0c8-part014.logd",
+    "diagnostic\\build-3774a0c8-part015.logd",
+    "diagnostic\\build-3774a0c8-part016.logd",
+    "diagnostic\\build-3774a0c8-part017.logd",
+    "diagnostic\\build-3774a0c8-part018.logd",
+    "diagnostic\\build-3774a0c8-part019.logd"
+  ],
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": true,
+  "chunk_size_bytes": 41943040,
+  "password": "734ed0cff24c2c25e733",
+  "decrypt_command": "encryptly unpack diagnostic\\build-3774a0c8.logd <outdir> --password 734ed0cff24c2c25e733",
+  "total_modules": 1,
+  "passed": 0,
+  "failed": 1,
+  "modules": [
+    {
+      "name": "frontend",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [WinError 2] \u7cfb\u7edf\u627e\u4e0d\u5230\u6307\u5b9a\u7684\u6587\u4ef6\u3002"
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic\\build-3774a0c8-part001.logd, diagnostic\\build-3774a0c8-part002.logd, diagnostic\\build-3774a0c8-part003.logd, diagnostic\\build-3774a0c8-part004.logd, diagnostic\\build-3774a0c8-part005.logd, diagnostic\\build-3774a0c8-part006.logd, diagnostic\\build-3774a0c8-part007.logd, diagnostic\\build-3774a0c8-part008.logd, diagnostic\\build-3774a0c8-part009.logd, diagnostic\\build-3774a0c8-part010.logd, diagnostic\\build-3774a0c8-part011.logd, diagnostic\\build-3774a0c8-part012.logd, diagnostic\\build-3774a0c8-part013.logd, diagnostic\\build-3774a0c8-part014.logd, diagnostic\\build-3774a0c8-part015.logd, diagnostic\\build-3774a0c8-part016.logd, diagnostic\\build-3774a0c8-part017.logd, diagnostic\\build-3774a0c8-part018.logd, diagnostic\\build-3774a0c8-part019.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
